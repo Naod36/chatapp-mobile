@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "chatapp-mobile",
+    "name": "FlowChat",
     "slug": "chatapp-mobile",
+    "description": "FlowChat - Fast, modern real-time messaging with group chat pinning, voice notes, and seamless multi-device synchronization.",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +13,7 @@
     "android": {
       "package": "com.flowchat.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -29,6 +30,12 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "161db668-a5e0-4a99-bde8-354e7a8704e8"
+      }
+    },
+    "owner": "nas369s-team"
   }
 }
