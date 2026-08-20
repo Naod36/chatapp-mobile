@@ -62,7 +62,7 @@ export function useMessages(convId, conversationPinnedId = null) {
 
         const isCurrentConv = (data) => {
             const id = data.conversation_id || data.message?.conversation_id;
-            return String(id) === String(convId);
+            return String(id || "").toLowerCase() === String(convId || "").toLowerCase();
         };
 
         const handler = (data) => {
