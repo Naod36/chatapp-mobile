@@ -7,22 +7,30 @@ let pingIntervalTimer = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let isIntentionallyClosed = false;
+let appStateSubscription = null;
 
 const listeners = new Set();
 const openCallbacks = new Set();
 const closeCallbacks = new Set();
 
-// Listen to React Native AppState changes (Foreground vs Background)
-let appState = AppState.currentState;
-AppState.addEventListener("change", (nextAppState) => {
-    if (appState.match(/inactive|background/) && nextAppState === "active") {
-        console.log("App returned to foreground — checking WebSocket health...");
-        if (currentToken && (!socketInstance || socketInstance.readyState === WebSocket.CLOSED || socketInstance.readyState === WebSocket.CLOSING)) {
-            websocketService.reconnect();
-        }
+function setupAppStateListener() {
+    if (appStateSubscription) return;
+
+    try {
+        let appState = AppState.currentState;
+        appStateSubscription = AppState.addEventListener("change", (nextAppState) => {
+            if (appState && appState.match(/inactive|background/) && nextAppState === "active") {
+                console.log("App returned to foreground — checking WebSocket health...");
+                if (currentToken && (!socketInstance || socketInstance.readyState === WebSocket.CLOSED || socketInstance.readyState === WebSocket.CLOSING)) {
+                    websocketService.reconnect();
+                }
+            }
+            appState = nextAppState;
+        });
+    } catch (err) {
+        console.warn("Could not setup AppState listener:", err);
     }
-    appState = nextAppState;
-});
+}
 
 function startHeartbeat() {
     stopHeartbeat();
@@ -66,6 +74,8 @@ export const websocketService = {
             console.error("WebSocket connection requires an auth token.");
             return null;
         }
+
+        setupAppStateListener();
 
         if (onMessage) listeners.add(onMessage);
         if (onOpen) openCallbacks.add(onOpen);
@@ -120,7 +130,7 @@ export const websocketService = {
         };
 
         socketInstance.onerror = (error) => {
-            console.error("WebSocket error:", error);
+            console.warn("WebSocket connection notice:", error?.message || "network check");
             if (onError) onError(error);
         };
 

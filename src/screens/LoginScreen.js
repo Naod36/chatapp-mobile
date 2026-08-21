@@ -130,7 +130,7 @@ function BottomMovingWaves() {
                         </LinearGradient>
                     </Defs>
                     <Path
-                        d={`M0,50 C${w * 0.25},140 ${w * 0.55},0 ${w * 0.8},110 ${w},30 L${w},${waveHeight} L0,${waveHeight} Z`}
+                        d={`M 0 50 C ${Math.round(w * 0.33)} 140 ${Math.round(w * 0.66)} 0 ${Math.round(w)} 50 L ${Math.round(w)} ${waveHeight} L 0 ${waveHeight} Z`}
                         fill="url(#waveGradBack)"
                     />
                 </Svg>
@@ -147,7 +147,7 @@ function BottomMovingWaves() {
                         </LinearGradient>
                     </Defs>
                     <Path
-                        d={`M0,85 C${w * 0.28},15 ${w * 0.6},125 ${w * 0.82},35 ${w},90 L${w},${waveHeight} L0,${waveHeight} Z`}
+                        d={`M 0 85 C ${Math.round(w * 0.33)} 20 ${Math.round(w * 0.66)} 120 ${Math.round(w)} 60 L ${Math.round(w)} ${waveHeight} L 0 ${waveHeight} Z`}
                         fill="url(#waveGradFront)"
                     />
                 </Svg>

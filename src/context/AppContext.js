@@ -73,7 +73,10 @@ export function AppProvider({ children }) {
             }));
             setConversations(normalized);
         } catch (err) {
-            console.error("loadConversations error:", err.message);
+            console.warn("loadConversations notice:", err.message);
+            if (err.message?.includes("session has expired") || err.message?.includes("401") || err.message?.includes("Access denied")) {
+                logout();
+            }
         } finally {
             setSyncState("ready");
         }
@@ -94,7 +97,7 @@ export function AppProvider({ children }) {
             null, // handlers registered separately below via subscribe
             () => setSyncState("ready"),
             () => setSyncState("connecting"),
-            (err) => console.error("WS Error:", err)
+            (err) => console.warn("WS Error:", err)
         );
     }, [user?.token]);
 

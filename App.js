@@ -1,8 +1,8 @@
-import React from "react";
+import React, { Component } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View, Text, TouchableOpacity } from "react-native";
 
 import { AppProvider, useApp } from "./src/context/AppContext";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -12,6 +12,44 @@ import NewMessageScreen from "./src/screens/NewMessageScreen";
 import NewGroupScreen from "./src/screens/NewGroupScreen";
 
 const Stack = createNativeStackNavigator();
+
+class ErrorBoundary extends Component {
+    state = { hasError: false, error: null };
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error("Uncaught App Error:", error, errorInfo);
+    }
+
+    handleReload = () => {
+        this.setState({ hasError: false, error: null });
+    };
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <View style={{ flex: 1, backgroundColor: "#0F172A", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                    <Text style={{ color: "#F8FAFC", fontSize: 20, fontWeight: "bold", marginBottom: 12 }}>
+                        Something went wrong
+                    </Text>
+                    <Text style={{ color: "#94A3B8", textAlign: "center", marginBottom: 24, fontSize: 14 }}>
+                        {this.state.error?.message || "An unexpected error occurred."}
+                    </Text>
+                    <TouchableOpacity
+                        onPress={this.handleReload}
+                        style={{ backgroundColor: "#3B82F6", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+                    >
+                        <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>Reload App</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 function AppNavigator() {
     const { user, authLoading, login, theme: t } = useApp();
@@ -62,8 +100,10 @@ function AppNavigator() {
 
 export default function App() {
     return (
-        <AppProvider>
-            <AppNavigator />
-        </AppProvider>
+        <ErrorBoundary>
+            <AppProvider>
+                <AppNavigator />
+            </AppProvider>
+        </ErrorBoundary>
     );
 }
