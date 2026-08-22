@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
     View,
     FlatList,
@@ -8,6 +8,7 @@ import {
     Platform,
     Alert,
     Clipboard,
+    Keyboard,
 } from "react-native";
 
 import { useApp } from "../context/AppContext";
@@ -222,6 +223,19 @@ export default function ChatScreen({ route, navigation }) {
         setReplyingTo(null);
     }, [inputText, attachment, replyingTo, editingMessage, editMessage, sendMessage]);
 
+    // ─── Scroll to end on Keyboard show ──────────────────────────────────────
+    useEffect(() => {
+        const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+        const subscription = Keyboard.addListener(showEvent, () => {
+            if (messages.length > 0) {
+                setTimeout(() => {
+                    flatListRef.current?.scrollToEnd({ animated: true });
+                }, 80);
+            }
+        });
+        return () => subscription.remove();
+    }, [messages]);
+
     // ─── Render ───────────────────────────────────────────────────────────────
     const isTypingActive = typingUser || (typingMap?.[convId] ? true : null);
     const selectedMsgIsPinned = selectedMsg ? pinnedMessages.some(p => String(p.message_id || p.id) === String(selectedMsg.id || selectedMsg.message_id)) : false;
@@ -229,7 +243,7 @@ export default function ChatScreen({ route, navigation }) {
     return (
         <KeyboardAvoidingView
             style={[styles.container, { backgroundColor: t.chatPaneBg || t.bg }]}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
             <ChatHeader
                 conversation={conversation}

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import {
-    View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, Image, Modal, TouchableWithoutFeedback, Alert, ActivityIndicator
+    View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, Image, Modal, TouchableWithoutFeedback, Alert, ActivityIndicator, Keyboard
 } from "react-native";
 import Svg, { Path, Line } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
@@ -64,7 +64,26 @@ export default function MessageInput({
     uploadProgress,
 }) {
     const insets = useSafeAreaInsets();
-    const dynamicPaddingBottom = Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 8);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener(
+            Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+            () => setKeyboardVisible(true)
+        );
+        const hideSub = Keyboard.addListener(
+            Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+            () => setKeyboardVisible(false)
+        );
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
+
+    const dynamicPaddingBottom = keyboardVisible
+        ? (Platform.OS === "ios" ? 8 : 6)
+        : Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 8);
     const inputRef = useRef(null);
     const [pickerVisible, setPickerVisible] = useState(false);
     const [recording, setRecording] = useState(null);
