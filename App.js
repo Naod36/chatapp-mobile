@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { ActivityIndicator, View, Text, TouchableOpacity, Linking } from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { API_BASE } from "./src/services/api";
 
 import { AppProvider, useApp } from "./src/context/AppContext";
@@ -52,10 +53,21 @@ class ErrorBoundary extends Component {
     }
 }
 
-const CURRENT_BUILD_NUMBER = 1;
+import Constants from "expo-constants";
+
+// Dynamically read build number from native APK (e.g. versionCode 1, 2, 3...)
+const CURRENT_BUILD_NUMBER = parseInt(
+    Constants.nativeBuildVersion || Constants.expoConfig?.android?.versionCode || 1,
+    10
+);
 
 function UpdateBanner() {
+    // In local dev mode, don't show update prompts
+    if (__DEV__) return null;
+
+    const insets = useSafeAreaInsets();
     const [latestRelease, setLatestRelease] = React.useState(null);
+    const [dismissed, setDismissed] = React.useState(false);
 
     React.useEffect(() => {
         fetch(`${API_BASE}/releases/latest?platform=android`)
@@ -68,19 +80,35 @@ function UpdateBanner() {
             .catch(() => {});
     }, []);
 
-    if (!latestRelease) return null;
+    if (!latestRelease || dismissed) return null;
+
+    const paddingTop = Math.max(insets.top + 4, 28);
 
     return (
-        <View style={{ backgroundColor: "#0284C7", paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", zIndex: 9999 }}>
-            <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600", flex: 1 }}>
+        <View style={{
+            backgroundColor: "#0284C7",
+            paddingTop: paddingTop,
+            paddingBottom: 10,
+            paddingHorizontal: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            zIndex: 9999,
+        }}>
+            <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600", flex: 1, marginRight: 8 }} numberOfLines={1}>
                 🚀 New Update Available (v{latestRelease.version})
             </Text>
-            <TouchableOpacity
-                onPress={() => Linking.openURL(latestRelease.apk_url)}
-                style={{ backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 }}
-            >
-                <Text style={{ color: "#0284C7", fontSize: 12, fontWeight: "700" }}>Download</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <TouchableOpacity
+                    onPress={() => Linking.openURL(latestRelease.apk_url)}
+                    style={{ backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 }}
+                >
+                    <Text style={{ color: "#0284C7", fontSize: 12, fontWeight: "700" }}>Download</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setDismissed(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700", opacity: 0.8 }}>✕</Text>
+                </TouchableOpacity>
+            </View>
         </View>
     );
 }
@@ -137,9 +165,11 @@ function AppNavigator() {
 export default function App() {
     return (
         <ErrorBoundary>
-            <AppProvider>
-                <AppNavigator />
-            </AppProvider>
+            <SafeAreaProvider>
+                <AppProvider>
+                    <AppNavigator />
+                </AppProvider>
+            </SafeAreaProvider>
         </ErrorBoundary>
     );
 }

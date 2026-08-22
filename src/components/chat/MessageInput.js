@@ -41,6 +41,8 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 /**
  * MessageInput — bottom bar for composing, attaching media, recording voice, and sending messages.
  */
@@ -61,6 +63,8 @@ export default function MessageInput({
     isUploading,
     uploadProgress,
 }) {
+    const insets = useSafeAreaInsets();
+    const dynamicPaddingBottom = Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 8);
     const inputRef = useRef(null);
     const [pickerVisible, setPickerVisible] = useState(false);
     const [recording, setRecording] = useState(null);
@@ -297,7 +301,7 @@ export default function MessageInput({
     };
 
     return (
-        <View style={[styles.outerWrap, { backgroundColor: t.bg, borderTopColor: t.borderColor }]}>
+        <View style={[styles.outerWrap, { backgroundColor: t.bg, borderTopColor: t.borderColor, paddingBottom: dynamicPaddingBottom }]}>
             {/* Editing bar */}
             {editingMessage && (
                 <View style={[styles.replyBar, { backgroundColor: t.cardBg, borderColor: t.borderColor }]}>
@@ -470,7 +474,7 @@ export default function MessageInput({
                 <TouchableWithoutFeedback onPress={() => setPickerVisible(false)}>
                     <View style={styles.modalBackdrop}>
                         <TouchableWithoutFeedback>
-                            <View style={[styles.modalSheet, { backgroundColor: t.cardBg, borderColor: t.borderColor }]}>
+                            <View style={[styles.modalSheet, { backgroundColor: t.cardBg, borderColor: t.borderColor, paddingBottom: Math.max(insets.bottom + 16, Platform.OS === "ios" ? 40 : 24) }]}>
                                 <Text style={[styles.modalTitle, { color: t.text }]}>Attach Media</Text>
                                 <TouchableOpacity style={[styles.optionRow, { borderBottomColor: t.borderColor }]} onPress={handlePickImage}>
                                     <Text style={{ fontSize: 22, marginRight: 12 }}>🖼️</Text>

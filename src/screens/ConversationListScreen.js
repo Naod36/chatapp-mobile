@@ -6,12 +6,15 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Circle } from "react-native-svg";
+import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../hooks/useConversations";
 import ConversationHeader from "../components/conversations/ConversationHeader";
 import ConversationItem from "../components/conversations/ConversationItem";
 import EmptyState from "../components/conversations/EmptyState";
 import Avatar from "../components/common/Avatar";
+import otaConfig from "../config/otaVersion.json";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
 import { API_BASE } from "../services/api";
@@ -274,6 +277,24 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
                                     <LogoutIcon color="#ef4444" size={18} />
                                     <Text style={styles.logoutBtnText}>Sign Out</Text>
                                 </TouchableOpacity>
+
+                                {/* App Version & OTA Info */}
+                                <View style={{ alignItems: "center", marginTop: 20, marginBottom: 4 }}>
+                                    <Text style={{ fontSize: 11.5, fontWeight: "600", color: t.textMuted }}>
+                                        FlowChat v{Constants.expoConfig?.version || "1.0.1"} (Build {Constants.expoConfig?.android?.versionCode || Constants.nativeBuildVersion || "2"})
+                                    </Text>
+                                    {(() => {
+                                        const otaTime = Updates.createdAt
+                                            ? new Date(Updates.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                            : null;
+                                        const otaHash = Updates.updateId ? Updates.updateId.substring(0, 8) : (__DEV__ ? "dev-live" : "embedded");
+                                        return (
+                                            <Text style={{ fontSize: 10.5, marginTop: 3, color: t.textMuted, opacity: 0.75, fontFamily: Platform.OS === "ios" ? "Courier" : "monospace" }}>
+                                                OTA #{otaConfig.otaNumber} ({otaConfig.lastUpdated}) • {otaHash}{otaTime ? ` • ${otaTime}` : ''}
+                                            </Text>
+                                        );
+                                    })()}
+                                </View>
                             </>
                         )}
                     </ScrollView>
