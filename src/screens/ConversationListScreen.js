@@ -294,6 +294,33 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
                                             </Text>
                                         );
                                     })()}
+
+                                    <TouchableOpacity
+                                        onPress={async () => {
+                                            if (__DEV__) {
+                                                Alert.alert("Dev Mode", "OTA Updates are disabled in dev mode.");
+                                                return;
+                                            }
+                                            try {
+                                                Alert.alert("Checking...", "Checking Expo servers for OTA updates...");
+                                                const update = await Updates.checkForUpdateAsync();
+                                                if (update.isAvailable) {
+                                                    Alert.alert("Update Found!", "Downloading and applying latest OTA update...");
+                                                    await Updates.fetchUpdateAsync();
+                                                    await Updates.reloadAsync();
+                                                } else {
+                                                    Alert.alert("Up to Date", "Your app is running the latest available update.");
+                                                }
+                                            } catch (err) {
+                                                Alert.alert("OTA Update", err.message || "Failed to check for updates");
+                                            }
+                                        }}
+                                        style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: t.isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)" }}
+                                    >
+                                        <Text style={{ fontSize: 11, fontWeight: "700", color: t.accent }}>
+                                            🔄 Tap to Force Check & Apply OTA Update
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
                             </>
                         )}
