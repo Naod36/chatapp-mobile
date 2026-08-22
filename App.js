@@ -2,7 +2,8 @@ import React, { Component } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View, Text, TouchableOpacity } from "react-native";
+import { ActivityIndicator, View, Text, TouchableOpacity, Linking } from "react-native";
+import { API_BASE } from "./src/services/api";
 
 import { AppProvider, useApp } from "./src/context/AppContext";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -51,6 +52,39 @@ class ErrorBoundary extends Component {
     }
 }
 
+const CURRENT_BUILD_NUMBER = 1;
+
+function UpdateBanner() {
+    const [latestRelease, setLatestRelease] = React.useState(null);
+
+    React.useEffect(() => {
+        fetch(`${API_BASE}/releases/latest?platform=android`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data && data.build_number > CURRENT_BUILD_NUMBER) {
+                    setLatestRelease(data);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    if (!latestRelease) return null;
+
+    return (
+        <View style={{ backgroundColor: "#0284C7", paddingHorizontal: 16, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", zIndex: 9999 }}>
+            <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "600", flex: 1 }}>
+                🚀 New Update Available (v{latestRelease.version})
+            </Text>
+            <TouchableOpacity
+                onPress={() => Linking.openURL(latestRelease.apk_url)}
+                style={{ backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 }}
+            >
+                <Text style={{ color: "#0284C7", fontSize: 12, fontWeight: "700" }}>Download</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
 function AppNavigator() {
     const { user, authLoading, login, theme: t } = useApp();
 
@@ -67,6 +101,7 @@ function AppNavigator() {
         return (
             <>
                 <StatusBar style={t.isDark ? "light" : "dark"} />
+                <UpdateBanner />
                 <LoginScreen onLoginSuccess={login} />
             </>
         );
@@ -88,6 +123,7 @@ function AppNavigator() {
     return (
         <NavigationContainer theme={navTheme}>
             <StatusBar style={t.isDark ? "light" : "dark"} />
+            <UpdateBanner />
             <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
                 <Stack.Screen name="Conversations" component={ConversationListScreen} />
                 <Stack.Screen name="Chat" component={ChatScreen} />
