@@ -281,7 +281,7 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
                                 {/* App Version & OTA Info */}
                                 <View style={{ alignItems: "center", marginTop: 20, marginBottom: 4 }}>
                                     <Text style={{ fontSize: 11.5, fontWeight: "600", color: t.textMuted }}>
-                                        FlowChat v{Constants.expoConfig?.version || "1.0.1"} (Build {Constants.expoConfig?.android?.versionCode || Constants.nativeBuildVersion || "2"})
+                                        FlowChat v{Constants.expoConfig?.version || "1.0.3"} (Build {Constants.expoConfig?.android?.versionCode || Constants.nativeBuildVersion || "3"})
                                     </Text>
                                     {(() => {
                                         const otaTime = Updates.createdAt
