@@ -12,6 +12,9 @@
 //      (both as a local env var here, and as a Render environment variable).
 
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
+
+const easEntry = createRequire(import.meta.url).resolve("eas-cli/bin/run");
 
 const BACKEND_URL =
   process.env.RELEASE_BACKEND_URL ||
@@ -37,9 +40,9 @@ console.log(
 let stdout;
 try {
   stdout = execFileSync(
-    "npx",
+    process.execPath,
     [
-      "eas",
+      easEntry,
       "build",
       "--platform",
       "android",
@@ -52,7 +55,6 @@ try {
       stdio: ["inherit", "pipe", "inherit"],
       encoding: "utf8",
       maxBuffer: 1024 * 1024 * 20,
-      shell: process.platform === "win32",
     },
   );
 } catch (err) {
