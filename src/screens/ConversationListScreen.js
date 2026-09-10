@@ -166,6 +166,70 @@ const THEME_COLORS = {
   sunsetOLED: "#E11D48",
 };
 
+// ─── Confirm Dialog (themed replacement for native Alert) ─────────────────────
+
+function ConfirmDialog({
+  visible,
+  title,
+  message,
+  confirmLabel = "Confirm",
+  cancelLabel = "Cancel",
+  destructive = false,
+  onConfirm,
+  onCancel,
+  theme: t,
+}) {
+  if (!visible) return null;
+  return (
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={onCancel}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "rgba(0,0,0,0.5)",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+        }}
+      >
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 340,
+            backgroundColor: t.cardBg,
+            borderRadius: 16,
+            borderWidth: 1,
+            borderColor: t.borderColor,
+            padding: 20,
+          }}
+        >
+          <Text style={{ fontSize: 16, fontWeight: "800", color: t.text, marginBottom: 8 }}>
+            {title}
+          </Text>
+          <Text style={{ fontSize: 13, color: t.textMuted, lineHeight: 18, marginBottom: 20 }}>
+            {message}
+          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
+            <TouchableOpacity onPress={onCancel} style={{ paddingVertical: 8, paddingHorizontal: 14 }}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: t.textMuted }}>{cancelLabel}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onConfirm}
+              style={{
+                paddingVertical: 8,
+                paddingHorizontal: 14,
+                borderRadius: 8,
+                backgroundColor: destructive ? "#ef4444" : t.accent,
+              }}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>{confirmLabel}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── Account Panel ────────────────────────────────────────────────────────────
 
 function AccountPanel({ visible, onClose, theme: t, onLogout }) {
@@ -181,6 +245,7 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -237,24 +302,13 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
   };
 
   const handleLogoutPress = () => {
-    if (Platform.OS === "web") {
-      // Skip confirm on web — window.confirm can be unreliable.
-      // The panel's close button gives the user an easy cancel path.
-      onClose();
-      onLogout();
-    } else {
-      Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Sign Out",
-          style: "destructive",
-          onPress: () => {
-            onClose();
-            onLogout();
-          },
-        },
-      ]);
-    }
+    setShowSignOutConfirm(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setShowSignOutConfirm(false);
+    onClose();
+    onLogout();
   };
 
   if (!visible) return null;
@@ -418,6 +472,17 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
+
+      <ConfirmDialog
+        visible={showSignOutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmLabel="Sign Out"
+        destructive
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowSignOutConfirm(false)}
+        theme={t}
+      />
     </Modal>
   );
 }
@@ -540,7 +605,7 @@ function OtaInfoPanel({ theme: t }) {
             ? "Checking for updates..."
             : state === "applying"
               ? "Applying update..."
-              : "🔄 Check for Updates"}
+              : "Check for Updates"}
         </Text>
       </TouchableOpacity>
 
