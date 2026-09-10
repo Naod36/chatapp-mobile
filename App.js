@@ -2,8 +2,9 @@ import React, { Component } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, View, Text, TouchableOpacity, Linking } from "react-native";
+import { ActivityIndicator, View, Text, TouchableOpacity, Linking, AppState } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Updates from "expo-updates";
 import { API_BASE } from "./src/services/api";
 
 import { AppProvider, useApp } from "./src/context/AppContext";
@@ -113,8 +114,45 @@ function UpdateBanner() {
     );
 }
 
+// Silently fetches JS-only OTA updates in the background and applies them
+// while the app is backgrounded, so users never see a manual "update" prompt
+// or have to redownload the APK for non-native changes.
+function useSilentOtaUpdates() {
+    React.useEffect(() => {
+        if (__DEV__ || !Updates.isEnabled) return;
+
+        let pendingApply = false;
+
+        const checkAndFetch = async () => {
+            try {
+                const result = await Updates.checkForUpdateAsync();
+                if (result.isAvailable) {
+                    await Updates.fetchUpdateAsync();
+                    pendingApply = true;
+                }
+            } catch {
+                // Network hiccups are expected and must never surface to the user.
+            }
+        };
+
+        checkAndFetch();
+
+        const subscription = AppState.addEventListener("change", (state) => {
+            if (state === "active") {
+                checkAndFetch();
+            } else if (state === "background" && pendingApply) {
+                pendingApply = false;
+                Updates.reloadAsync().catch(() => {});
+            }
+        });
+
+        return () => subscription.remove();
+    }, []);
+}
+
 function AppNavigator() {
     const { user, authLoading, login, theme: t } = useApp();
+    useSilentOtaUpdates();
 
     if (authLoading) {
         return (

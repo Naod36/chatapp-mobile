@@ -27,7 +27,12 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "release:android": "node scripts/publish-release.mjs",
+    "ota:publish": "eas update --branch production --non-interactive"
+  },
+  "devDependencies": {
+    "eas-cli": "^24.0.0"
   },
   "private": true
 }
