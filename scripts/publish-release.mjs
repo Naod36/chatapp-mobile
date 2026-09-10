@@ -25,7 +25,7 @@ if (!RELEASE_API_KEY) {
 }
 
 const notesIndex = process.argv.indexOf("--notes");
-const releaseNotesArg = notesIndex !== -1 ? process.argv[notesIndex + 1] : undefined;
+const releaseNotesArg = notesIndex !== -1 ? process.argv.slice(notesIndex + 1).join(" ") : undefined;
 
 console.log("Building Android production APK via EAS (this can take several minutes)...");
 
@@ -34,12 +34,18 @@ try {
     stdout = execFileSync(
         "npx",
         ["eas", "build", "--platform", "android", "--profile", "production", "--non-interactive", "--json"],
-        { stdio: ["inherit", "pipe", "inherit"], encoding: "utf8", maxBuffer: 1024 * 1024 * 20 }
+        {
+            stdio: ["inherit", "pipe", "inherit"],
+            encoding: "utf8",
+            maxBuffer: 1024 * 1024 * 20,
+            shell: process.platform === "win32",
+        }
     );
-} catch {
+} catch (err) {
     console.error(
         "EAS build failed or is waiting on Expo authentication.\n" +
-        "Run 'npx eas-cli login' once (interactively) if you have not authenticated this machine yet."
+        "Run 'npx eas-cli login' once (interactively) if you have not authenticated this machine yet.\n" +
+        String(err?.message || err)
     );
     process.exit(1);
 }
@@ -55,7 +61,7 @@ try {
 const build = Array.isArray(builds) ? builds[0] : builds;
 const apkUrl = build?.artifacts?.buildUrl;
 
-if (!build || build.status !== "finished" || !apkUrl) {
+if (!build || build.status?.toUpperCase() !== "FINISHED" || !apkUrl) {
     console.error("Build did not complete successfully:\n" + JSON.stringify(build, null, 2));
     process.exit(1);
 }
