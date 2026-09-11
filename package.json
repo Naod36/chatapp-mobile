@@ -4,9 +4,10 @@
   "main": "index.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-google-signin/google-signin": "^16.1.5",
     "@react-navigation/native": "^7.3.16",
     "@react-navigation/native-stack": "^7.18.8",
-    "expo": "~54.0.36",
+    "expo": "~54.0.37",
     "expo-auth-session": "~7.0.11",
     "expo-av": "~16.0.8",
     "expo-crypto": "~15.0.9",
@@ -31,8 +32,8 @@
     "release:android": "node scripts/publish-release.mjs",
     "ota:publish": "node scripts/publish-ota.mjs"
   },
+  "private": true,
   "devDependencies": {
-    "eas-cli": "^24.0.0"
-  },
-  "private": true
+    "eas-cli": "^24.3.0"
+  }
 }

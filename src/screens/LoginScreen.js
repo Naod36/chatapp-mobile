@@ -14,10 +14,35 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
+import {
+  GoogleSignin,
+  isSuccessResponse,
+  isErrorWithCode,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { authService } from "../services/auth";
 
 WebBrowser.maybeCompleteAuthSession();
+
+// Reused from the web app's OAuth client; native (Android/iOS) sign-in needs its own
+// dedicated client IDs registered in Google Cloud Console (package/bundle + SHA-1),
+// which GoogleSignin.configure() below will pick up once created.
+const GOOGLE_WEB_CLIENT_ID =
+  "545601616376-4fqet7dm5otcki9hcm5ifjugbja5vj0s.apps.googleusercontent.com";
+const GOOGLE_IOS_CLIENT_ID =
+  "545601616376-mk8sfpavdtieko9aic76mmafino8i5re.apps.googleusercontent.com";
+
+if (Platform.OS !== "web") {
+  try {
+    GoogleSignin.configure({
+      webClientId: GOOGLE_WEB_CLIENT_ID,
+      iosClientId: GOOGLE_IOS_CLIENT_ID,
+    });
+  } catch {
+    // Native Google Sign-In module isn't available yet (e.g. running in Expo Go without a dev build).
+  }
+}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -252,11 +277,13 @@ export default function LoginScreen({ onLoginSuccess }) {
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
-      clientId:
-        "765688882603-sjt9jl25jd28k8hmo2jjgr53fmvn4hki.apps.googleusercontent.com",
+      clientId: GOOGLE_WEB_CLIENT_ID,
       scopes: ["openid", "profile", "email"],
       redirectUri,
       responseType: "token",
+      // PKCE only applies to the authorization code flow; Google rejects it with
+      // "Parameter not allowed for this message type: code_challenge_method" when combined with implicit "token" flow.
+      usePKCE: false,
     },
     discovery,
   );
@@ -292,6 +319,31 @@ export default function LoginScreen({ onLoginSuccess }) {
       setError(err.message || "Google Sign In failed");
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleNativeGoogleSignIn = async () => {
+    setError(null);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (isSuccessResponse(response) && response.data.idToken) {
+        await handleGoogleToken(response.data.idToken);
+      }
+    } catch (err) {
+      const cancelled =
+        isErrorWithCode(err) && err.code === statusCodes.SIGN_IN_CANCELLED;
+      if (!cancelled) {
+        setError(err.message || "Google Sign In failed");
+      }
+    }
+  };
+
+  const handleGoogleButtonPress = () => {
+    if (Platform.OS === "web") {
+      promptAsync();
+    } else {
+      handleNativeGoogleSignIn();
     }
   };
 
@@ -401,8 +453,8 @@ export default function LoginScreen({ onLoginSuccess }) {
         {renderFormItem(
           <TouchableOpacity
             style={[styles.googleBtn, { borderColor: t.inputBorder }]}
-            onPress={() => promptAsync()}
-            disabled={!request || googleLoading}
+            onPress={handleGoogleButtonPress}
+            disabled={(Platform.OS === "web" && !request) || googleLoading}
             activeOpacity={0.8}
           >
             {googleLoading ? (

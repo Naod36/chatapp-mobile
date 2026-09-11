@@ -9,7 +9,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.flowchat.mobile"
     },
     "android": {
       "package": "com.flowchat.mobile",
@@ -31,7 +32,13 @@
       "policy": "appVersion"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.545601616376-mk8sfpavdtieko9aic76mmafino8i5re"
+        }
+      ]
     ],
     "extra": {
       "eas": {
