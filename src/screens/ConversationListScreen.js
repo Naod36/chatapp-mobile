@@ -20,8 +20,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 import * as Updates from "expo-updates";
-import * as Notifications from "expo-notifications";
 import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../hooks/useConversations";
@@ -669,21 +669,6 @@ function OtaInfoPanel({ theme: t }) {
   // "idle" | "checking" | "applying" | "none" | "error"
   const [state, setState] = useState("idle");
   const [message, setMessage] = useState(null);
-  const [categoryDebug, setCategoryDebug] = useState(null);
-
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    Notifications.getNotificationCategoriesAsync()
-      .then((cats) => {
-        const found = cats.find((c) => c.identifier === "message");
-        setCategoryDebug(
-          found
-            ? `message category OK (${found.actions.length} action${found.actions.length === 1 ? "" : "s"})`
-            : `message category MISSING (${cats.length} total registered)`,
-        );
-      })
-      .catch((err) => setCategoryDebug(`category check error: ${err.message}`));
-  }, []);
 
   useEffect(() => {
     if (state !== "none" && state !== "error") return;
@@ -754,8 +739,8 @@ function OtaInfoPanel({ theme: t }) {
     >
       <Text style={{ fontSize: 11.5, fontWeight: "600", color: t.textMuted }}>
         FlowChat v{Constants.expoConfig?.version || "1.0.3"} (Build{" "}
-        {Constants.expoConfig?.android?.versionCode ||
-          Constants.nativeBuildVersion ||
+        {Application.nativeBuildVersion ||
+          Constants.expoConfig?.android?.versionCode ||
           "3"}
         )
       </Text>
@@ -771,19 +756,6 @@ function OtaInfoPanel({ theme: t }) {
         OTA #{otaConfig.otaNumber} · {otaDateLabel}
         {otaTimeLabel ? ` · ${otaTimeLabel}` : ""} · {otaHash}
       </Text>
-
-      {categoryDebug && (
-        <Text
-          style={{
-            fontSize: 9.5,
-            marginTop: 3,
-            color: t.textMuted,
-            opacity: 0.6,
-          }}
-        >
-          {categoryDebug}
-        </Text>
-      )}
 
       <TouchableOpacity
         onPress={handleCheckForUpdate}
