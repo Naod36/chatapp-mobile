@@ -286,7 +286,13 @@ function ConfirmDialog({
 
 // ─── Account Panel ────────────────────────────────────────────────────────────
 
-function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }) {
+function AccountPanel({
+  visible,
+  onClose,
+  theme: t,
+  onLogout,
+  onProfileUpdated,
+}) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(600)).current;
 
@@ -367,7 +373,8 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
 
   const handlePickAvatar = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
           "Permission Needed",
@@ -390,12 +397,20 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
       setError(null);
 
       const formData = new FormData();
-      if (Platform.OS === "web" || asset.uri.startsWith("blob:") || asset.uri.startsWith("data:")) {
+      if (
+        Platform.OS === "web" ||
+        asset.uri.startsWith("blob:") ||
+        asset.uri.startsWith("data:")
+      ) {
         const response = await fetch(asset.uri);
         const blob = await response.blob();
-        const fileObj = new File([blob], asset.fileName || `avatar_${Date.now()}.jpg`, {
-          type: asset.mimeType || blob.type || "image/jpeg",
-        });
+        const fileObj = new File(
+          [blob],
+          asset.fileName || `avatar_${Date.now()}.jpg`,
+          {
+            type: asset.mimeType || blob.type || "image/jpeg",
+          },
+        );
         formData.append("file", fileObj);
       } else {
         formData.append("file", {
@@ -516,11 +531,21 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
                   size={72}
                 />
                 {uploadingAvatar ? (
-                  <View style={[styles.avatarOverlay, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                  <View
+                    style={[
+                      styles.avatarOverlay,
+                      { backgroundColor: "rgba(0,0,0,0.45)" },
+                    ]}
+                  >
                     <ActivityIndicator color="#fff" size="small" />
                   </View>
                 ) : (
-                  <View style={[styles.avatarBadge, { backgroundColor: t.accent, borderColor: t.bg }]}>
+                  <View
+                    style={[
+                      styles.avatarBadge,
+                      { backgroundColor: t.accent, borderColor: t.bg },
+                    ]}
+                  >
                     <CameraIcon color="#fff" size={14} />
                   </View>
                 )}
