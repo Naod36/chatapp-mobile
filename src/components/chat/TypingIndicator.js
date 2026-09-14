@@ -1,24 +1,74 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, StyleSheet, Animated } from "react-native";
+
+const TYPING_GREEN = "#22c55e";
+
+function useBounceDot(delay) {
+  const value = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let loop;
+    const timer = setTimeout(() => {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(value, {
+            toValue: 1,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0,
+            duration: 700,
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      loop.start();
+    }, delay);
+    return () => {
+      clearTimeout(timer);
+      loop?.stop();
+    };
+  }, [value, delay]);
+
+  return value;
+}
+
+function Dot({ delay }) {
+  const value = useBounceDot(delay);
+  const translateY = value.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -5],
+  });
+  const opacity = value.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
+
+  return (
+    <Animated.View
+      style={[styles.dot, { opacity, transform: [{ translateY }] }]}
+    />
+  );
+}
 
 /**
- * TypingIndicator — animated "..." dots row shown when someone is typing.
- * Props: username (string), theme
+ * TypingIndicator — animated bouncing 3-dot row shown when someone is typing,
+ * matching the web app's typing animation.
+ * Props: username (truthy = someone is typing), theme
  */
 export default function TypingIndicator({ username, theme: t }) {
-    if (!username) return null;
+  if (!username) return null;
 
-    const textLabel = typeof username === "string" ? `${username} is typing…` : "typing…";
-
-    return (
-        <View style={styles.wrap}>
-            <View style={[styles.bubble, { backgroundColor: t.otherBubbleBg }]}>
-                <Text style={[styles.text, { color: t.accent }]}>
-                    💬 {textLabel}
-                </Text>
-            </View>
-        </View>
-    );
+  return (
+    <View style={styles.wrap}>
+      <View style={[styles.bubble, { backgroundColor: t.otherBubbleBg }]}>
+        <Dot delay={0} />
+        <Dot delay={200} />
+        <Dot delay={400} />
+      </View>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -28,13 +78,18 @@ const styles = StyleSheet.create({
         alignSelf: "flex-start",
     },
     bubble: {
-        paddingHorizontal: 12,
-        paddingVertical: 7,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 4,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
         borderRadius: 16,
         borderTopLeftRadius: 4,
     },
-    text: {
-        fontSize: 12.5,
-        fontWeight: "600",
+    dot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: TYPING_GREEN,
     },
 });

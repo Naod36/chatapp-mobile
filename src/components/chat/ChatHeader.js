@@ -100,11 +100,7 @@ export default function ChatHeader({ conversation, typingUser, onBack }) {
             style={[
               styles.subtitleText,
               {
-                color: typingUser
-                  ? t.accent
-                  : isOnline
-                    ? "#22c55e"
-                    : t.textMuted,
+                color: typingUser || isOnline ? "#22c55e" : t.textMuted,
               },
             ]}
             numberOfLines={1}

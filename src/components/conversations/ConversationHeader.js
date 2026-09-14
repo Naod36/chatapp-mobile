@@ -139,8 +139,18 @@ export default function ConversationHeader({
           {syncState === "ready" ? (
             <View style={styles.brandRow}>
               <View style={styles.brandParallelogramWrap}>
-                <View style={[styles.brandParallelogram, { backgroundColor: t.text }]} />
-                <View style={[styles.brandParallelogram, { backgroundColor: t.text, marginLeft: 2 }]} />
+                <View
+                  style={[
+                    styles.brandParallelogram,
+                    { backgroundColor: t.text },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.brandParallelogram,
+                    { backgroundColor: t.text, marginLeft: 2 },
+                  ]}
+                />
               </View>
               <Text style={[styles.appName, { color: t.text }]}>FlowChat</Text>
             </View>
