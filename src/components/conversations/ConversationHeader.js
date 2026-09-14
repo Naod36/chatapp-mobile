@@ -2,6 +2,7 @@ import React from "react";
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -141,20 +142,10 @@ export default function ConversationHeader({
         <View style={styles.titleWrap}>
           {syncState === "ready" ? (
             <View style={styles.brandRow}>
-              <View style={styles.brandParallelogramWrap}>
-                <View
-                  style={[
-                    styles.brandParallelogram,
-                    { backgroundColor: t.text },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.brandParallelogram,
-                    { backgroundColor: t.text, marginLeft: 2 },
-                  ]}
-                />
-              </View>
+              <Image
+                source={require("../../../assets/icon.png")}
+                style={styles.brandLogo}
+              />
               <Text style={[styles.appName, { color: t.text }]}>FlowChat</Text>
             </View>
           ) : (
@@ -247,15 +238,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  brandParallelogramWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  brandParallelogram: {
-    width: 6,
-    height: 16,
-    borderRadius: 1.5,
-    transform: [{ skewX: "-12deg" }],
+  brandLogo: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
   },
   appName: {
     fontSize: 20,
