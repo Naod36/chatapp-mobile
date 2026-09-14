@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import Svg, { Path } from "react-native-svg";
 import SyncBadge from "../common/SyncBadge";
 
@@ -21,12 +22,39 @@ function ComposeIcon({ color }) {
     );
 }
 
+function SunIcon({ color }) {
+    return (
+        <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <Path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke={color} strokeWidth="2" strokeLinecap="round" />
+            <Path d="M12 7a5 5 0 100 10 5 5 0 000-10z" stroke={color} strokeWidth="2" />
+        </Svg>
+    );
+}
+
+function MoonIcon({ color }) {
+    return (
+        <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <Path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
+
+function UserIcon({ color }) {
+    return (
+        <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <Path d="M12 6a4 4 0 100 8 4 4 0 000-8z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M4 18c0-4 3.582-7 8-7s8 3 8 7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
+
 /**
  * ConversationHeader — top bar for the conversation list screen.
  * Props: syncState, searchQuery, onSearchChange, theme, onLogout, onCompose
  */
-export default function ConversationHeader({ syncState, searchQuery, onSearchChange, theme: t }) {
+export default function ConversationHeader({ syncState, searchQuery, onSearchChange, theme: t, onThemePress, onAccountPress }) {
     const insets = useSafeAreaInsets();
+    const ThemeToggleIcon = t.isDark ? SunIcon : MoonIcon;
 
     return (
         <View
@@ -39,6 +67,12 @@ export default function ConversationHeader({ syncState, searchQuery, onSearchCha
                 },
             ]}
         >
+            <BlurView
+                intensity={t.isDark ? 40 : 60}
+                tint={t.isDark ? "dark" : "light"}
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+            />
             {/* Title row */}
             <View style={styles.titleRow}>
                 <View style={styles.titleWrap}>
@@ -48,10 +82,32 @@ export default function ConversationHeader({ syncState, searchQuery, onSearchCha
                         <SyncBadge syncState={syncState} theme={t} />
                     )}
                 </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity
+                        onPress={onThemePress}
+                        style={[styles.headerIconBtn, { backgroundColor: t.accent + "18" }]}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <ThemeToggleIcon color={t.accent} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        onPress={onAccountPress}
+                        style={[styles.headerIconBtn, { backgroundColor: t.accent + "18" }]}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                        <UserIcon color={t.accent} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Search bar */}
             <View style={[styles.searchWrap, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
+                <BlurView
+                    intensity={t.isDark ? 35 : 55}
+                    tint={t.isDark ? "dark" : "light"}
+                    pointerEvents="none"
+                    style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+                />
                 <SearchIcon color={t.textMuted} />
                 <TextInput
                     value={searchQuery}
@@ -78,6 +134,7 @@ const styles = StyleSheet.create({
         paddingBottom: 10,
         paddingHorizontal: 14,
         gap: 10,
+        overflow: "hidden",
     },
     titleRow: {
         flexDirection: "row",
@@ -86,6 +143,18 @@ const styles = StyleSheet.create({
         paddingTop: 2,
     },
     titleWrap: { flex: 1 },
+    headerActions: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    headerIconBtn: {
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     appName: {
         fontSize: 22,
         fontWeight: "900",
@@ -102,9 +171,10 @@ const styles = StyleSheet.create({
     searchWrap: {
         flexDirection: "row",
         alignItems: "center",
-        borderRadius: 22,
+        borderRadius: 99,
         borderWidth: 1,
-        paddingHorizontal: 12,
+        overflow: "hidden",
+        paddingHorizontal: 14,
         paddingVertical: 9,
         gap: 8,
     },

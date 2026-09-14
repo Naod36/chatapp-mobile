@@ -21,6 +21,7 @@ import {
   statusCodes,
 } from "@react-native-google-signin/google-signin";
 import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
+import { BlurView } from "expo-blur";
 import { authService } from "../services/auth";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -46,17 +47,17 @@ if (Platform.OS !== "web") {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// FlowChat auth theme (matches web dark theme)
+// FlowChat auth theme (monochrome + indigo, matches the redesigned web app)
 const THEME = {
-  pageBg: "#021526",
-  cardBg: "rgba(2, 21, 38, 0.85)",
-  cardBorder: "rgba(110, 172, 218, 0.2)",
-  text: "#e2e8f0",
-  textMuted: "#94a3b8",
-  inputBorder: "rgba(110, 172, 218, 0.2)",
-  buttonBg: "#03346E",
+  pageBg: "#09090b",
+  cardBg: "rgba(24, 24, 27, 0.6)",
+  cardBorder: "rgba(129, 140, 248, 0.2)",
+  text: "#f4f4f5",
+  textMuted: "#a1a1aa",
+  inputBorder: "rgba(129, 140, 248, 0.2)",
+  buttonBg: "#6366f1",
   buttonText: "#ffffff",
-  accent: "#6EACDA",
+  accent: "#818cf8",
 };
 
 // Animated wave line component for top background background
@@ -160,8 +161,8 @@ function BottomMovingWaves() {
         >
           <Defs>
             <LinearGradient id="waveGradBack" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#38bdf8" stopOpacity="0.75" />
-              <Stop offset="100%" stopColor="#0284c7" stopOpacity="0.95" />
+              <Stop offset="0%" stopColor="#818cf8" stopOpacity="0.75" />
+              <Stop offset="100%" stopColor="#6366f1" stopOpacity="0.95" />
             </LinearGradient>
           </Defs>
           <Path
@@ -183,7 +184,7 @@ function BottomMovingWaves() {
         >
           <Defs>
             <LinearGradient id="waveGradFront" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0%" stopColor="#0284c7" stopOpacity="0.95" />
+              <Stop offset="0%" stopColor="#6366f1" stopOpacity="0.95" />
               <Stop offset="50%" stopColor="#0369a1" stopOpacity="1.0" />
               <Stop offset="100%" stopColor="#021526" stopOpacity="1.0" />
             </LinearGradient>
@@ -422,6 +423,7 @@ export default function LoginScreen({ onLoginSuccess }) {
           },
         ]}
       >
+        <BlurView intensity={45} tint="dark" pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} />
         {/* Logo */}
         {renderFormItem(<FlowChatLogo />, formIndex++)}
 
@@ -655,6 +657,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     padding: 28,
     zIndex: 2,
+    overflow: "hidden",
     // Glassmorphism effect
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 25 },

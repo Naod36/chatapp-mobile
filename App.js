@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Linking,
   AppState,
+  Platform,
 } from "react-native";
 import {
   SafeAreaProvider,
@@ -16,6 +17,20 @@ import {
 } from "react-native-safe-area-context";
 import * as Updates from "expo-updates";
 import { API_BASE } from "./src/services/api";
+
+// Web-only: hide the OS scrollbar so it doesn't clash with the app's own UI.
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const styleId = "flowchat-hide-scrollbar";
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = `
+      * { scrollbar-width: none; -ms-overflow-style: none; }
+      *::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    `;
+    document.head.appendChild(style);
+  }
+}
 
 import { AppProvider, useApp } from "./src/context/AppContext";
 import LoginScreen from "./src/screens/LoginScreen";

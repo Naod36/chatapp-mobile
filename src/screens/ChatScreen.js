@@ -265,6 +265,7 @@ export default function ChatScreen({ route, navigation }) {
                 data={messages}
                 keyExtractor={(item, idx) => String(item.id || item.message_id || idx)}
                 onScrollToIndexFailed={() => {}}
+                showsVerticalScrollIndicator={false}
                 renderItem={({ item }) => {
                     const senderId = String(item.sender_id || item.user_id || "");
                     const isOwn = senderId === currentUserId;

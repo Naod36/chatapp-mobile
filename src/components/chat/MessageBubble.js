@@ -74,11 +74,11 @@ function MessageBubble({ msg, isOwn, isGroup, theme: t, currentUserId, participa
                         <View style={[
                             styles.replyPreview,
                             {
-                                borderLeftColor: isOwn ? (t.isDark ? "#38bdf8" : "#fff") : t.accent,
+                                borderLeftColor: isOwn ? (t.isDark ? "#818cf8" : "#fff") : t.accent,
                                 backgroundColor: isOwn ? "rgba(0,0,0,0.12)" : "rgba(0,0,0,0.05)",
                             },
                         ]}>
-                            <Text style={[styles.replyName, { color: isOwn ? (t.isDark ? "#38bdf8" : "#fff") : t.accent }]} numberOfLines={1}>
+                            <Text style={[styles.replyName, { color: isOwn ? (t.isDark ? "#818cf8" : "#fff") : t.accent }]} numberOfLines={1}>
                                 {msg.reply_to.sender_name || "Reply"}
                             </Text>
                             <Text style={[styles.replyContent, { color: isOwn ? "rgba(255,255,255,0.8)" : t.textMuted }]} numberOfLines={1}>

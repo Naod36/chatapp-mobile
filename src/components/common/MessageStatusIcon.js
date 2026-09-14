@@ -26,7 +26,7 @@ export default function MessageStatusIcon({ status, isOwn, isDark = false }) {
 
     const isRead = status === "read";
     const color = isRead
-        ? (isDark ? "#38bdf8" : "#a5f3fc")
+        ? (isDark ? "#818cf8" : "#a5f3fc")
         : (isDark ? "rgba(180,180,180,0.75)" : "rgba(255,255,255,0.75)");
 
     if (status === "sent") {

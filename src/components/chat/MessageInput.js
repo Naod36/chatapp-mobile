@@ -42,6 +42,7 @@ function formatFileSize(bytes) {
 }
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 
 /**
  * MessageInput — bottom bar for composing, attaching media, recording voice, and sending messages.
@@ -410,6 +411,12 @@ export default function MessageInput({
                     </TouchableOpacity>
 
                     <View style={[styles.inputWrap, styles.recordingActiveWrap, { backgroundColor: t.cardBg, borderColor: t.accent }]}>
+                        <BlurView
+                            intensity={t.isDark ? 45 : 65}
+                            tint={t.isDark ? "dark" : "light"}
+                            pointerEvents="none"
+                            style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+                        />
                         <View style={styles.redDot} />
                         <Text style={[styles.recordingTimeText, { color: t.text }]}>
                             {formatRecTime(recordingSecs)}
@@ -446,6 +453,12 @@ export default function MessageInput({
                     </TouchableOpacity>
 
                     <View style={[styles.inputWrap, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
+                        <BlurView
+                            intensity={t.isDark ? 40 : 60}
+                            tint={t.isDark ? "dark" : "light"}
+                            pointerEvents="none"
+                            style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+                        />
                         <TextInput
                             ref={inputRef}
                             value={value}
@@ -592,6 +605,7 @@ const styles = StyleSheet.create({
         flex: 1,
         borderRadius: 22,
         borderWidth: 1,
+        overflow: "hidden",
         paddingHorizontal: 14,
         paddingTop: 10,
         paddingBottom: 10,

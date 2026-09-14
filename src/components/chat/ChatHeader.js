@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import Avatar from "../common/Avatar";
 import { useApp } from "../../context/AppContext";
 
@@ -52,11 +53,17 @@ export default function ChatHeader({ conversation, typingUser, onBack }) {
                 styles.header,
                 {
                     backgroundColor: t.headerBg,
-                    borderBottomColor: t.borderColor,
-                    paddingTop: insets.top + 8,
+                    borderColor: t.borderColor,
+                    marginTop: insets.top + 8,
                 },
             ]}
         >
+            <BlurView
+                intensity={t.isDark ? 45 : 65}
+                tint={t.isDark ? "dark" : "light"}
+                pointerEvents="none"
+                style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+            />
             <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Text style={[styles.backIcon, { color: t.accent }]}>‹</Text>
             </TouchableOpacity>
@@ -95,10 +102,18 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 12,
-        paddingBottom: 10,
+        marginHorizontal: 12,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
         gap: 10,
-        borderBottomWidth: 1,
+        borderRadius: 18,
+        borderWidth: 1,
+        overflow: "hidden",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+        elevation: 4,
     },
     backBtn: {
         paddingRight: 4,

@@ -95,7 +95,7 @@ export function AppProvider({ children }) {
         websocketService.connect(
             user.token,
             null, // handlers registered separately below via subscribe
-            () => setSyncState("ready"),
+            () => loadConversations(true), // reconnected: show "updating" while re-syncing, then "ready"
             () => setSyncState("connecting"),
             (err) => console.warn("WS Error:", err)
         );

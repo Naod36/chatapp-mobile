@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 
 /**
@@ -6,13 +6,28 @@ import { View, Text, StyleSheet, Animated } from "react-native";
  * Props: syncState ("connecting"|"updating"|"ready"), theme
  */
 export default function SyncBadge({ syncState, theme: t }) {
+    const pulse = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulse, { toValue: 0.3, duration: 650, useNativeDriver: true }),
+                Animated.timing(pulse, { toValue: 1, duration: 650, useNativeDriver: true }),
+            ]),
+        );
+        loop.start();
+        return () => loop.stop();
+    }, [pulse]);
+
     if (syncState === "ready") return null;
 
     const label = syncState === "connecting" ? "Connecting..." : "Updating...";
 
     return (
-        <View style={[styles.badge, { backgroundColor: t.cardBg, borderColor: t.borderColor }]}>
-            <View style={[styles.dot, { backgroundColor: t.textMuted }]} />
+        <View style={styles.badge}>
+            <Animated.View
+                style={[styles.dot, { backgroundColor: t.accent, opacity: pulse }]}
+            />
             <Text style={[styles.label, { color: t.textMuted }]}>{label}</Text>
         </View>
     );
@@ -22,21 +37,17 @@ const styles = StyleSheet.create({
     badge: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 20,
-        borderWidth: 1,
-        alignSelf: "center",
-        marginBottom: 4,
+        gap: 6,
+        alignSelf: "flex-start",
     },
     dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
+        width: 7,
+        height: 7,
+        borderRadius: 4,
     },
     label: {
-        fontSize: 11,
-        fontWeight: "600",
+        fontSize: 16,
+        fontWeight: "900",
+        letterSpacing: 0.2,
     },
 });

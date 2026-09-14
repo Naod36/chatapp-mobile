@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import { API_BASE } from "./api";
 
 async function handleResponse(response, defaultMsg) {
@@ -123,6 +125,15 @@ export const authService = {
         await AsyncStorage.removeItem("chat_token");
         await AsyncStorage.removeItem("chat_userId");
         await AsyncStorage.removeItem("chat_username");
+        if (Platform.OS !== "web") {
+            try {
+                // Clears the cached native Google session so the next sign-in shows the account picker
+                // instead of silently reusing the same account.
+                await GoogleSignin.signOut();
+            } catch {
+                // No cached Google session, or native module unavailable (e.g. Expo Go).
+            }
+        }
     },
 
     async isAuthenticated() {

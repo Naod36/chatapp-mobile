@@ -4,6 +4,7 @@ import {
   Text,
   TextInput,
   FlatList,
+  RefreshControl,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -15,6 +16,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
@@ -339,6 +341,12 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
           },
         ]}
       >
+        <BlurView
+          intensity={t.isDark ? 45 : 65}
+          tint={t.isDark ? "dark" : "light"}
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+        />
         {/* Handle bar */}
         <View style={[styles.handle, { backgroundColor: t.borderColor }]} />
 
@@ -626,45 +634,11 @@ function OtaInfoPanel({ theme: t }) {
 
 // ─── Bottom Dock ──────────────────────────────────────────────────────────────
 
-function BottomDock({ theme: t, navigation, onAccountPress }) {
-  const { changeTheme, themeKey } = useApp();
+function BottomDock({ theme: t, navigation }) {
   const insets = useSafeAreaInsets();
-  const [showThemePicker, setShowThemePicker] = useState(false);
-
-  const ThemeToggleIcon = t.isDark ? SunIcon : MoonIcon;
 
   return (
-    <View style={styles.dockWrapper}>
-      {/* Theme picker slide-up tray */}
-      {showThemePicker && (
-        <View
-          style={[
-            styles.themeTray,
-            { backgroundColor: t.cardBg, borderColor: t.borderColor },
-          ]}
-        >
-          <Text style={[styles.trayLabel, { color: t.textMuted }]}>
-            SELECT THEME
-          </Text>
-          <View style={styles.swatchRow}>
-            {THEME_KEYS.map((key) => (
-              <TouchableOpacity
-                key={key}
-                onPress={() => {
-                  changeTheme(key);
-                  setShowThemePicker(false);
-                }}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: THEME_COLORS[key] },
-                  themeKey === key && styles.swatchActive,
-                ]}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
+    <View style={styles.dockWrapper} pointerEvents="box-none">
       {/* Floating dock pill */}
       <View
         style={[
@@ -677,64 +651,36 @@ function BottomDock({ theme: t, navigation, onAccountPress }) {
           },
         ]}
       >
+        <BlurView
+          intensity={t.isDark ? 45 : 65}
+          tint={t.isDark ? "dark" : "light"}
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+        />
         {/* New DM */}
         <TouchableOpacity
-          style={styles.dockItem}
+          style={styles.dockIconBtn}
           onPress={() => navigation.navigate("NewMessage")}
           activeOpacity={0.7}
         >
           <View
             style={[styles.iconCircle, { backgroundColor: t.accent + "18" }]}
           >
-            <PencilIcon color={t.accent} size={20} />
+            <PencilIcon color={t.accent} size={22} />
           </View>
-          <Text style={[styles.dockLabel, { color: t.textMuted }]}>
-            Message
-          </Text>
         </TouchableOpacity>
 
         {/* New Group */}
         <TouchableOpacity
-          style={styles.dockItem}
+          style={styles.dockIconBtn}
           onPress={() => navigation.navigate("NewGroup")}
           activeOpacity={0.7}
         >
           <View
             style={[styles.iconCircle, { backgroundColor: t.accent + "18" }]}
           >
-            <GroupIcon color={t.accent} size={20} />
+            <GroupIcon color={t.accent} size={22} />
           </View>
-          <Text style={[styles.dockLabel, { color: t.textMuted }]}>Group</Text>
-        </TouchableOpacity>
-
-        {/* Theme */}
-        <TouchableOpacity
-          style={styles.dockItem}
-          onPress={() => setShowThemePicker((v) => !v)}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[styles.iconCircle, { backgroundColor: t.accent + "18" }]}
-          >
-            <ThemeToggleIcon color={t.accent} size={20} />
-          </View>
-          <Text style={[styles.dockLabel, { color: t.textMuted }]}>Theme</Text>
-        </TouchableOpacity>
-
-        {/* Account */}
-        <TouchableOpacity
-          style={styles.dockItem}
-          onPress={onAccountPress}
-          activeOpacity={0.7}
-        >
-          <View
-            style={[styles.iconCircle, { backgroundColor: t.accent + "18" }]}
-          >
-            <UserIcon color={t.accent} size={20} />
-          </View>
-          <Text style={[styles.dockLabel, { color: t.textMuted }]}>
-            Account
-          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -744,7 +690,10 @@ function BottomDock({ theme: t, navigation, onAccountPress }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ConversationListScreen({ navigation }) {
-  const { theme: t, logout } = useApp();
+  const { theme: t, logout, changeTheme, themeKey } = useApp();
+  const insets = useSafeAreaInsets();
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const {
     conversations,
     syncState,
@@ -755,6 +704,7 @@ export default function ConversationListScreen({ navigation }) {
     startConversation,
     typingMap,
     presenceMap,
+    loadConversations,
   } = useConversations();
 
   const [accountOpen, setAccountOpen] = useState(false);
@@ -783,6 +733,15 @@ export default function ConversationListScreen({ navigation }) {
     logout().catch((err) => console.warn("Logout error:", err));
   }, [logout]);
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadConversations(false);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadConversations]);
+
   const showSearch = searchQuery.trim().length > 0;
 
   return (
@@ -792,7 +751,48 @@ export default function ConversationListScreen({ navigation }) {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         theme={t}
+        onThemePress={() => setShowThemePicker((v) => !v)}
+        onAccountPress={() => setAccountOpen(true)}
       />
+
+      {showThemePicker && (
+        <View
+          style={[
+            styles.themeTrayTop,
+            {
+              top: insets.top + 62,
+              backgroundColor: t.cardBg,
+              borderColor: t.borderColor,
+            },
+          ]}
+        >
+          <BlurView
+            intensity={t.isDark ? 45 : 65}
+            tint={t.isDark ? "dark" : "light"}
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+          />
+          <Text style={[styles.trayLabel, { color: t.textMuted }]}>
+            SELECT THEME
+          </Text>
+          <View style={styles.swatchRow}>
+            {THEME_KEYS.map((key) => (
+              <TouchableOpacity
+                key={key}
+                onPress={() => {
+                  changeTheme(key);
+                  setShowThemePicker(false);
+                }}
+                style={[
+                  styles.swatch,
+                  { backgroundColor: THEME_COLORS[key] },
+                  themeKey === key && styles.swatchActive,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+      )}
 
       {showSearch ? (
         <FlatList
@@ -828,6 +828,7 @@ export default function ConversationListScreen({ navigation }) {
               <EmptyState theme={t} isSearchEmpty />
             )
           }
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         />
       ) : (
@@ -848,15 +849,21 @@ export default function ConversationListScreen({ navigation }) {
           ListEmptyComponent={
             syncState === "connecting" ? null : <EmptyState theme={t} />
           }
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={t.accent}
+              colors={[t.accent]}
+              progressBackgroundColor={t.cardBg}
+            />
+          }
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         />
       )}
 
-      <BottomDock
-        theme={t}
-        navigation={navigation}
-        onAccountPress={() => setAccountOpen(true)}
-      />
+      <BottomDock theme={t} navigation={navigation} />
 
       <AccountPanel
         visible={accountOpen}
@@ -891,26 +898,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    alignItems: "center",
+    alignItems: "flex-end",
+    paddingRight: 16,
     pointerEvents: "box-none",
   },
   dock: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: 32,
     borderWidth: 1,
+    overflow: "hidden",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 20,
     elevation: 12,
   },
-  dockItem: {
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
+  dockIconBtn: {
+    paddingHorizontal: 6,
   },
   iconCircle: {
     width: 46,
@@ -919,17 +926,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dockLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-  },
 
   // Theme tray
+  themeTrayTop: {
+    position: "absolute",
+    right: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    overflow: "hidden",
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 10,
+    zIndex: 50,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+  },
   themeTray: {
     alignSelf: "center",
     borderRadius: 18,
     borderWidth: 1,
+    overflow: "hidden",
     paddingHorizontal: 18,
     paddingVertical: 14,
     marginBottom: 8,
@@ -958,7 +977,7 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
   },
   swatchActive: {
-    borderColor: "#0284c7",
+    borderColor: "#6366f1",
     transform: [{ scale: 1.15 }],
   },
 
@@ -981,6 +1000,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
+    overflow: "hidden",
     maxHeight: "88%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -6 },
