@@ -177,8 +177,7 @@ export function AppProvider({ children }) {
         else if (msg.message_type === "image") preview = "Image";
         else if (msg.message_type === "voice" || msg.message_type === "audio")
           preview = "Voice message";
-        else if (msg.message_type === "file")
-          preview = msg.file_name || "File";
+        else if (msg.message_type === "file") preview = msg.file_name || "File";
         else if (msg.message_type === "video") preview = "Video";
 
         setConversations((prev) => {

@@ -72,24 +72,24 @@ export default function TypingIndicator({ username, theme: t }) {
 }
 
 const styles = StyleSheet.create({
-    wrap: {
-        paddingHorizontal: 14,
-        paddingVertical: 4,
-        alignSelf: "flex-start",
-    },
-    bubble: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 4,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderRadius: 16,
-        borderTopLeftRadius: 4,
-    },
-    dot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: TYPING_GREEN,
-    },
+  wrap: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+  },
+  bubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: TYPING_GREEN,
+  },
 });

@@ -53,7 +53,8 @@ const navigationRef = createNavigationContainerRef();
 // when it's launched fresh from a killed state) and navigates to the matching
 // conversation once it's available in the loaded conversation list.
 function useNotificationNavigation(conversations) {
-  const [pendingConversationId, setPendingConversationId] = React.useState(null);
+  const [pendingConversationId, setPendingConversationId] =
+    React.useState(null);
 
   React.useEffect(() => {
     if (Platform.OS === "web") return;
@@ -67,7 +68,10 @@ function useNotificationNavigation(conversations) {
         conversationService
           .sendMessage(conversationId, response.userText)
           .catch((err) =>
-            console.warn("Failed to send reply from notification:", err.message),
+            console.warn(
+              "Failed to send reply from notification:",
+              err.message,
+            ),
           );
         return;
       }
@@ -86,7 +90,11 @@ function useNotificationNavigation(conversations) {
   }, []);
 
   React.useEffect(() => {
-    if (!pendingConversationId || !conversations || conversations.length === 0) {
+    if (
+      !pendingConversationId ||
+      !conversations ||
+      conversations.length === 0
+    ) {
       return;
     }
     if (!navigationRef.isReady()) return;
