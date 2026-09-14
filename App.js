@@ -22,6 +22,8 @@ import {
 import * as Updates from "expo-updates";
 import * as Notifications from "expo-notifications";
 import { API_BASE } from "./src/services/api";
+import { conversationService } from "./src/services/conversations";
+import { REPLY_ACTION_ID } from "./src/services/notifications";
 
 // Web-only: hide the OS scrollbar so it doesn't clash with the app's own UI.
 if (Platform.OS === "web" && typeof document !== "undefined") {
@@ -56,20 +58,29 @@ function useNotificationNavigation(conversations) {
   React.useEffect(() => {
     if (Platform.OS === "web") return;
 
-    const extractConversationId = (response) =>
-      response?.notification?.request?.content?.data?.conversation_id;
+    const handleResponse = (response) => {
+      const conversationId =
+        response?.notification?.request?.content?.data?.conversation_id;
+      if (!conversationId) return;
+
+      if (response.actionIdentifier === REPLY_ACTION_ID && response.userText) {
+        conversationService
+          .sendMessage(conversationId, response.userText)
+          .catch((err) =>
+            console.warn("Failed to send reply from notification:", err.message),
+          );
+        return;
+      }
+
+      setPendingConversationId(conversationId);
+    };
 
     Notifications.getLastNotificationResponseAsync().then((response) => {
-      const conversationId = extractConversationId(response);
-      if (conversationId) setPendingConversationId(conversationId);
+      if (response) handleResponse(response);
     });
 
-    const subscription = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        const conversationId = extractConversationId(response);
-        if (conversationId) setPendingConversationId(conversationId);
-      },
-    );
+    const subscription =
+      Notifications.addNotificationResponseReceivedListener(handleResponse);
 
     return () => subscription.remove();
   }, []);

@@ -12,7 +12,6 @@ import {
   Platform,
   Modal,
   PanResponder,
-  Dimensions,
   ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -22,6 +21,7 @@ import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
 import Constants from "expo-constants";
 import * as Updates from "expo-updates";
+import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../hooks/useConversations";
 import ConversationHeader from "../components/conversations/ConversationHeader";
@@ -153,6 +153,21 @@ function LogoutIcon({ color, size = 20 }) {
   );
 }
 
+function CameraIcon({ color, size = 16 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx="12" cy="13" r="4" stroke={color} strokeWidth="2" />
+    </Svg>
+  );
+}
+
 // ─── Theme Quick Picker ────────────────────────────────────────────────────────
 
 const THEME_KEYS = [
@@ -273,32 +288,13 @@ function ConfirmDialog({
 function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(600)).current;
-  const heightAnim = useRef(new Animated.Value(0)).current; // 0 = normal (88%), 1 = expanded (full screen)
-  const expandedRef = useRef(false);
-  const screenHeight = Dimensions.get("window").height;
-  const expandRange = screenHeight * 0.12; // extra height available between 88% and 100%
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 4,
       onPanResponderMove: (_, gesture) => {
-        if (gesture.dy < 0) {
-          // Dragging up: expand toward full screen
-          const base = expandedRef.current ? 1 : 0;
-          const progress = Math.min(
-            1,
-            Math.max(0, base - gesture.dy / expandRange),
-          );
-          heightAnim.setValue(progress);
-        } else if (gesture.dy > 0) {
-          // Dragging down: collapse (if expanded) and/or slide toward dismiss
-          slideAnim.setValue(gesture.dy);
-          if (expandedRef.current) {
-            const progress = Math.max(0, 1 - gesture.dy / expandRange);
-            heightAnim.setValue(progress);
-          }
-        }
+        if (gesture.dy > 0) slideAnim.setValue(gesture.dy);
       },
       onPanResponderRelease: (_, gesture) => {
         if (gesture.dy > 100 || gesture.vy > 0.8) {
@@ -307,26 +303,14 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
             duration: 200,
             useNativeDriver: true,
           }).start(() => onClose());
-          return;
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 20,
+            stiffness: 200,
+          }).start();
         }
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          useNativeDriver: true,
-          damping: 20,
-          stiffness: 200,
-        }).start();
-
-        if (gesture.dy < -40) {
-          expandedRef.current = true;
-        } else if (gesture.dy > 40) {
-          expandedRef.current = false;
-        }
-        Animated.spring(heightAnim, {
-          toValue: expandedRef.current ? 1 : 0,
-          useNativeDriver: false,
-          damping: 20,
-          stiffness: 200,
-        }).start();
       },
     }),
   ).current;
@@ -344,9 +328,7 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
 
   useEffect(() => {
     if (visible) {
-      // Slide up, reset to normal (non-expanded) height
-      expandedRef.current = false;
-      heightAnim.setValue(0);
+      // Slide up
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -380,6 +362,61 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
       }).start();
     }
   }, [visible]);
+
+  const handlePickAvatar = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Needed",
+          "FlowChat needs access to your photo library to change your profile picture.",
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.length) return;
+
+      const asset = result.assets[0];
+      setUploadingAvatar(true);
+      setError(null);
+
+      const formData = new FormData();
+      if (Platform.OS === "web" || asset.uri.startsWith("blob:") || asset.uri.startsWith("data:")) {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const fileObj = new File([blob], asset.fileName || `avatar_${Date.now()}.jpg`, {
+          type: asset.mimeType || blob.type || "image/jpeg",
+        });
+        formData.append("file", fileObj);
+      } else {
+        formData.append("file", {
+          uri: asset.uri,
+          name: asset.fileName || `avatar_${Date.now()}.jpg`,
+          type: asset.mimeType || "image/jpeg",
+        });
+      }
+
+      const uploadRes = await conversationService.uploadFile(formData);
+      const avatarUrl = uploadRes?.url;
+      if (!avatarUrl) throw new Error("Upload did not return a file URL");
+
+      const updated = { ...profile, avatar_url: avatarUrl };
+      await userService.updateProfile({ ...updated, status: "online" });
+      setProfile(updated);
+      onProfileUpdated?.(updated);
+    } catch (e) {
+      Alert.alert("Error", e.message || "Failed to update profile picture");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -435,15 +472,11 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
             backgroundColor: t.bg,
             borderColor: t.borderColor,
             paddingBottom: insets.bottom + 16,
-            height: heightAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [screenHeight * 0.88, screenHeight],
-            }),
             transform: [{ translateY: slideAnim }],
           },
         ]}
       >
-        {/* Handle bar (drag down to dismiss, drag up to expand) */}
+        {/* Handle bar (drag down to dismiss) */}
         <View {...panResponder.panHandlers}>
           <View style={[styles.handle, { backgroundColor: t.borderColor }]} />
 
@@ -463,19 +496,35 @@ function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }
           >
             {/* Avatar */}
             <View style={styles.avatarRow}>
-              <Avatar
-                uri={
-                  profile.avatar_url
-                    ? profile.avatar_url.startsWith("http")
-                      ? profile.avatar_url
-                      : `${API_BASE}${profile.avatar_url}`
-                    : null
-                }
-                name={profile.display_name || "?"}
-                size={72}
-              />
+              <TouchableOpacity
+                onPress={handlePickAvatar}
+                disabled={uploadingAvatar}
+                activeOpacity={0.75}
+                style={styles.avatarTouchable}
+              >
+                <Avatar
+                  uri={
+                    profile.avatar_url
+                      ? profile.avatar_url.startsWith("http")
+                        ? profile.avatar_url
+                        : `${API_BASE}${profile.avatar_url}`
+                      : null
+                  }
+                  name={profile.display_name || "?"}
+                  size={72}
+                />
+                {uploadingAvatar ? (
+                  <View style={[styles.avatarOverlay, { backgroundColor: "rgba(0,0,0,0.45)" }]}>
+                    <ActivityIndicator color="#fff" size="small" />
+                  </View>
+                ) : (
+                  <View style={[styles.avatarBadge, { backgroundColor: t.accent, borderColor: t.bg }]}>
+                    <CameraIcon color="#fff" size={14} />
+                  </View>
+                )}
+              </TouchableOpacity>
               <Text style={[styles.avatarHint, { color: t.textMuted }]}>
-                Update avatar via your web profile
+                Tap to change your profile picture
               </Text>
             </View>
 
@@ -1105,6 +1154,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     overflow: "hidden",
+    maxHeight: "88%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.2,
@@ -1144,6 +1194,31 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginBottom: 24,
+  },
+  avatarTouchable: {
+    width: 72,
+    height: 72,
+  },
+  avatarOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarHint: {
     fontSize: 12,

@@ -15,12 +15,38 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export const MESSAGE_CATEGORY_ID = "message";
+export const REPLY_ACTION_ID = "REPLY";
+
+// Registers a "message" notification category with an inline text-reply action,
+// so users can reply directly from the notification (Android RemoteInput / iOS
+// UNTextInputNotificationAction) without opening the app.
+export async function registerNotificationCategoriesAsync() {
+  if (Platform.OS === "web") return;
+  try {
+    await Notifications.setNotificationCategoryAsync(MESSAGE_CATEGORY_ID, [
+      {
+        identifier: REPLY_ACTION_ID,
+        buttonTitle: "Reply",
+        textInput: {
+          submitButtonTitle: "Send",
+          placeholder: "Type a message...",
+        },
+      },
+    ]);
+  } catch (err) {
+    console.warn("Failed to register notification categories:", err.message);
+  }
+}
+
 // Requests permission and returns an Expo push token for this device, or null
 // if permission was denied / running in an environment that doesn't support push
 // (web, simulators).
 export async function registerForPushNotificationsAsync() {
   if (Platform.OS === "web") return null;
   if (!Device.isDevice) return null;
+
+  await registerNotificationCategoriesAsync();
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
