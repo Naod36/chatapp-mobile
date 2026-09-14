@@ -11,11 +11,11 @@ export default function ContextMenu({ visible, message, isOwn, isPinned, theme: 
     if (!message) return null;
 
     const actions = [
-        { label: "↩  Reply", onPress: onReply },
-        ...(isOwn && message.content ? [{ label: "✏️  Edit Message", onPress: onEdit }] : []),
-        { label: "📋  Copy Text", onPress: onCopy, disabled: !message.content },
-        { label: (isPinned || message.is_pinned) ? "📌  Unpin Message" : "📌  Pin Message", onPress: onPin },
-        ...(isOwn ? [{ label: "🗑  Delete", onPress: onDelete, danger: true }] : []),
+        { label: "Reply", onPress: onReply },
+        ...(isOwn && message.content ? [{ label: "Edit Message", onPress: onEdit }] : []),
+        { label: "Copy Text", onPress: onCopy, disabled: !message.content },
+        { label: (isPinned || message.is_pinned) ? "Unpin Message" : "Pin Message", onPress: onPin },
+        ...(isOwn ? [{ label: "Delete", onPress: onDelete, danger: true }] : []),
     ];
 
     return (

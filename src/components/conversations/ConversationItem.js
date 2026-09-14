@@ -47,10 +47,10 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
     let rawPreview = c.last_message_content || c.last_message?.content || "";
     if (!rawPreview && c.last_message) {
         const mt = c.last_message.message_type;
-        if (mt === "image") rawPreview = "📷 Image";
-        else if (mt === "voice" || mt === "audio") rawPreview = "🎤 Voice message";
-        else if (mt === "file") rawPreview = `📎 ${c.last_message.file_name || "File"}`;
-        else if (mt === "video") rawPreview = "🎥 Video";
+        if (mt === "image") rawPreview = "Image";
+        else if (mt === "voice" || mt === "audio") rawPreview = "Voice message";
+        else if (mt === "file") rawPreview = c.last_message.file_name || "File";
+        else if (mt === "video") rawPreview = "Video";
     }
 
     const preview = isTyping

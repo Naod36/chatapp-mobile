@@ -17,6 +17,34 @@ import Svg, { Path, Line } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 
+function ImageIcon({ color, size = 20 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M21 15V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-1" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" stroke={color} strokeWidth="2" />
+      <Path d="M21 15l-5-5L5 21" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function DocumentIcon({ color, size = 20 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M13 2v7h7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function VideoIcon({ color, size = 20 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M23 7l-7 5 7 5V7z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M14 5H3a2 2 0 00-2 2v10a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 function PaperclipIcon({ color }) {
   return (
     <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -424,7 +452,7 @@ export default function MessageInput({
               style={[styles.replyLabel, { color: t.accent }]}
               numberOfLines={1}
             >
-              ✏️ Editing message
+              Editing message
             </Text>
             <Text
               style={[styles.replyContent, { color: t.textMuted }]}
@@ -493,13 +521,13 @@ export default function MessageInput({
                 { backgroundColor: t.accent + "20" },
               ]}
             >
-              <Text style={{ fontSize: 20 }}>
-                {attachment.mediaType === "video"
-                  ? "🎥"
-                  : attachment.mediaType === "voice"
-                    ? "🎙️"
-                    : "📎"}
-              </Text>
+              {attachment.mediaType === "video" ? (
+                <VideoIcon color={t.accent} size={20} />
+              ) : attachment.mediaType === "voice" ? (
+                <MicIcon color={t.accent} />
+              ) : (
+                <PaperclipIcon color={t.accent} />
+              )}
             </View>
           )}
           <View style={styles.previewTextWrap}>
@@ -742,7 +770,9 @@ export default function MessageInput({
                   ]}
                   onPress={handlePickImage}
                 >
-                  <Text style={{ fontSize: 22, marginRight: 12 }}>🖼️</Text>
+                  <View style={{ marginRight: 12 }}>
+                    <ImageIcon color={t.accent} size={22} />
+                  </View>
                   <View>
                     <Text style={[styles.optionText, { color: t.text }]}>
                       Photo or Video
@@ -756,7 +786,9 @@ export default function MessageInput({
                   style={styles.optionRow}
                   onPress={handlePickDocument}
                 >
-                  <Text style={{ fontSize: 22, marginRight: 12 }}>📄</Text>
+                  <View style={{ marginRight: 12 }}>
+                    <DocumentIcon color={t.accent} size={22} />
+                  </View>
                   <View>
                     <Text style={[styles.optionText, { color: t.text }]}>
                       Document or File

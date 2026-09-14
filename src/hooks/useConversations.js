@@ -43,9 +43,23 @@ export function useConversations() {
     // ─── Start a direct conversation ──────────────────────────────────────────
     const startConversation = useCallback(async (targetUser) => {
         try {
-            const conv = await conversationService.createConversation(
+            const result = await conversationService.createConversation(
                 targetUser.user_id || targetUser.id
             );
+            // The create endpoint only returns { conversation_id }; build a full
+            // conversation object from data we already have so the chat header
+            // shows the right name/avatar immediately instead of "Chat".
+            const conv = {
+                id: result.conversation_id,
+                conversation_id: result.conversation_id,
+                type: "direct",
+                other_participant: {
+                    user_id: targetUser.user_id || targetUser.id,
+                    username: targetUser.username,
+                    display_name: targetUser.display_name,
+                    avatar_url: targetUser.avatar_url,
+                },
+            };
             setConversations(prev => {
                 if (prev.some(c => String(c.id) === String(conv.id))) return prev;
                 return [conv, ...prev];

@@ -1,6 +1,18 @@
 import React from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { API_BASE } from "../../services/api";
+
+function BookmarkIcon({ size }) {
+    return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <Path
+                d="M6 3h12a1 1 0 011 1v17l-7-4-7 4V4a1 1 0 011-1z"
+                fill="#fff"
+            />
+        </Svg>
+    );
+}
 
 function getAssetUrl(url) {
     if (!url) return null;
@@ -66,7 +78,7 @@ export default function Avatar({
                 ]}
             >
                 {isSaved ? (
-                    <Text style={{ fontSize: size * 0.4, color: "#fff" }}>🔖</Text>
+                    <BookmarkIcon size={size * 0.42} />
                 ) : resolvedUri ? (
                     <Image
                         source={{ uri: resolvedUri }}

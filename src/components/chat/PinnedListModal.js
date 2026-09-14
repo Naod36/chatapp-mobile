@@ -1,5 +1,14 @@
 import React from "react";
 import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet, SafeAreaView } from "react-native";
+import Svg, { Path } from "react-native-svg";
+
+function PinIcon({ color, size = 16 }) {
+    return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <Path d="M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
 
 /**
  * PinnedListModal — View list of all pinned messages in a conversation.
@@ -13,7 +22,7 @@ export default function PinnedListModal({ visible, pinnedMessages = [], theme: t
             <SafeAreaView style={[styles.container, { backgroundColor: t.bg }]}>
                 {/* Header */}
                 <View style={[styles.header, { borderBottomColor: t.borderColor, backgroundColor: t.cardBg }]}>
-                    <Text style={[styles.title, { color: t.text }]}>📌 Pinned Messages ({pinnedMessages.length})</Text>
+                    <Text style={[styles.title, { color: t.text }]}>Pinned Messages ({pinnedMessages.length})</Text>
                     <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                         <Text style={[styles.closeText, { color: t.textMuted }]}>✕</Text>
                     </TouchableOpacity>
@@ -26,8 +35,8 @@ export default function PinnedListModal({ visible, pinnedMessages = [], theme: t
                     contentContainerStyle={styles.listContent}
                     renderItem={({ item, index }) => {
                         const snippet = item.content || (
-                            item.message_type === "image" ? "📷 Image" :
-                            (item.message_type === "audio" || item.message_type === "voice" ? "🎙️ Voice Message" : "📁 Attachment")
+                            item.message_type === "image" ? "Image" :
+                            (item.message_type === "audio" || item.message_type === "voice" ? "Voice Message" : "Attachment")
                         );
                         const isPersonal = item.scope === "personal";
 
@@ -47,7 +56,7 @@ export default function PinnedListModal({ visible, pinnedMessages = [], theme: t
                                         </Text>
                                         <View style={[styles.scopeBadge, { backgroundColor: isPersonal ? "#6366f120" : "#10b98120" }]}>
                                             <Text style={[styles.scopeText, { color: isPersonal ? "#6366f1" : "#10b981" }]}>
-                                                {isPersonal ? "👤 Personal" : "👥 Shared"}
+                                                {isPersonal ? "Personal" : "Shared"}
                                             </Text>
                                         </View>
                                     </View>
@@ -62,14 +71,16 @@ export default function PinnedListModal({ visible, pinnedMessages = [], theme: t
                                     onPress={() => onUnpinMessage(item)}
                                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                 >
-                                    <Text style={{ fontSize: 16 }}>📌✕</Text>
+                                    <Text style={{ color: t.textMuted, fontSize: 15, fontWeight: "700" }}>✕</Text>
                                 </TouchableOpacity>
                             </TouchableOpacity>
                         );
                     }}
                     ListEmptyComponent={
                         <View style={styles.emptyWrap}>
-                            <Text style={{ fontSize: 32, marginBottom: 8 }}>📌</Text>
+                            <View style={{ marginBottom: 8, opacity: 0.6 }}>
+                                <PinIcon color={t.textMuted} size={32} />
+                            </View>
                             <Text style={[styles.emptyText, { color: t.textMuted }]}>No pinned messages</Text>
                         </View>
                     }

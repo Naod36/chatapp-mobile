@@ -1,5 +1,14 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
+
+function PinIcon({ color, size = 14 }) {
+    return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+            <Path d="M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3-1-6z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
 
 /**
  * PinnedBanner — Telegram-style pinned message banner.
@@ -20,8 +29,8 @@ export default function PinnedBanner({
     const totalCount = pinnedMessages.length;
 
     const snippet = message.content || (
-        message.message_type === "image" ? "📷 Image" :
-        (message.message_type === "audio" || message.message_type === "voice" ? "🎙️ Voice Message" : "📁 Attachment")
+        message.message_type === "image" ? "Image" :
+        (message.message_type === "audio" || message.message_type === "voice" ? "Voice Message" : "Attachment")
     );
 
     const isPersonal = message.scope === "personal";
@@ -31,7 +40,7 @@ export default function PinnedBanner({
             {/* Cycle / Main content touchable */}
             <TouchableOpacity style={styles.mainArea} onPress={onCycle} activeOpacity={0.8}>
                 <View style={styles.iconCol}>
-                    <Text style={{ fontSize: 14 }}>📌</Text>
+                    <PinIcon color={t.accent} />
                     {totalCount > 1 && (
                         <Text style={[styles.counter, { color: t.accent }]}>
                             {safeIndex + 1}/{totalCount}

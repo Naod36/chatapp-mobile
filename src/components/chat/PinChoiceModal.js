@@ -1,5 +1,25 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Modal, StyleSheet, TouchableWithoutFeedback } from "react-native";
+import Svg, { Path, Circle } from "react-native-svg";
+
+function PersonIcon({ color }) {
+    return (
+        <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <Circle cx="12" cy="8" r="4" stroke={color} strokeWidth="2" />
+            <Path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
+
+function PeopleIcon({ color }) {
+    return (
+        <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <Circle cx="9" cy="7" r="4" stroke={color} strokeWidth="2" />
+            <Path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+    );
+}
 
 /**
  * PinChoiceModal — Choice prompt when pinning a message.
@@ -43,7 +63,9 @@ export default function PinChoiceModal({ visible, theme: t, isGroup = false, isA
                                         style={[styles.optionBtn, { backgroundColor: t.inputBg || t.bg }]}
                                         onPress={() => onSelectOption("personal", false)}
                                     >
-                                        <Text style={styles.optionIcon}>👤</Text>
+                                        <View style={styles.optionIconWrap}>
+                                            <PersonIcon color={t.text} />
+                                        </View>
                                         <View style={styles.optionContent}>
                                             <Text style={[styles.optionTitle, { color: t.text }]}>Pin for me</Text>
                                             <Text style={[styles.optionDesc, { color: t.textMuted }]}>
@@ -57,7 +79,9 @@ export default function PinChoiceModal({ visible, theme: t, isGroup = false, isA
                                             style={[styles.optionBtn, { backgroundColor: t.inputBg || t.bg }]}
                                             onPress={handleSelectShared}
                                         >
-                                            <Text style={styles.optionIcon}>👥</Text>
+                                            <View style={styles.optionIconWrap}>
+                                                <PeopleIcon color={t.text} />
+                                            </View>
                                             <View style={styles.optionContent}>
                                                 <Text style={[styles.optionTitle, { color: t.text }]}>
                                                     {isGroup ? "Pin for everyone" : "Pin for both of us"}
@@ -158,6 +182,9 @@ const styles = StyleSheet.create({
     },
     optionIcon: {
         fontSize: 22,
+        marginRight: 12,
+    },
+    optionIconWrap: {
         marginRight: 12,
     },
     optionContent: {

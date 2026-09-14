@@ -1,8 +1,27 @@
 import React, { memo } from "react";
 import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import MessageStatusIcon from "../common/MessageStatusIcon";
 import VoicePlayer from "./VoicePlayer";
 import { API_BASE } from "../../services/api";
+
+function FileIcon({ color }) {
+  return (
+    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <Path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M13 2v7h7" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function VideoIcon({ color }) {
+  return (
+    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+      <Path d="M23 7l-7 5 7 5V7z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M14 5H3a2 2 0 00-2 2v10a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2z" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
 
 function getAssetUrl(url) {
   if (!url) return null;
@@ -174,7 +193,7 @@ function MessageBubble({
           {/* File */}
           {isFile && (
             <View style={styles.mediaRow}>
-              <Text style={{ fontSize: 16 }}>📎</Text>
+              <FileIcon color={textColor} />
               <Text
                 style={[styles.mediaLabel, { color: textColor }]}
                 numberOfLines={1}
@@ -187,7 +206,7 @@ function MessageBubble({
           {/* Video */}
           {isVideo && (
             <View style={styles.mediaRow}>
-              <Text style={{ fontSize: 16 }}>🎥</Text>
+              <VideoIcon color={textColor} />
               <Text style={[styles.mediaLabel, { color: textColor }]}>
                 Video
               </Text>

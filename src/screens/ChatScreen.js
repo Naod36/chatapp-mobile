@@ -10,6 +10,7 @@ import {
   Clipboard,
   Keyboard,
 } from "react-native";
+import Svg, { Path } from "react-native-svg";
 
 import { useApp } from "../context/AppContext";
 import { useMessages } from "../hooks/useMessages";
@@ -22,6 +23,20 @@ import PinChoiceModal from "../components/chat/PinChoiceModal";
 import PinnedListModal from "../components/chat/PinnedListModal";
 import TypingIndicator from "../components/chat/TypingIndicator";
 import ContextMenu from "../components/chat/ContextMenu";
+
+function EmptyChatIcon({ color }) {
+  return (
+    <Svg width="40" height="40" viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
 
 export default function ChatScreen({ route, navigation }) {
   const { theme: t, user, typingMap } = useApp();
@@ -350,7 +365,9 @@ export default function ChatScreen({ route, navigation }) {
         ListEmptyComponent={
           loading ? null : (
             <View style={styles.emptyWrap}>
-              <Text style={{ fontSize: 36, marginBottom: 12 }}>👋</Text>
+              <View style={{ marginBottom: 12, opacity: 0.6 }}>
+                <EmptyChatIcon color={t.textMuted} />
+              </View>
               <Text style={[styles.emptyText, { color: t.textMuted }]}>
                 No messages yet. Say hello!
               </Text>

@@ -11,6 +11,7 @@ import { BlurView } from "expo-blur";
 import Svg, { Path } from "react-native-svg";
 import { useApp } from "../../context/AppContext";
 import SyncBadge from "../common/SyncBadge";
+import Avatar from "../common/Avatar";
 
 function SearchIcon({ color }) {
   return (
@@ -109,6 +110,8 @@ export default function ConversationHeader({
   searchQuery,
   onSearchChange,
   theme: t,
+  avatarUri,
+  displayName,
   onThemePress,
   onAccountPress,
 }) {
@@ -171,7 +174,7 @@ export default function ConversationHeader({
             style={[styles.headerIconBtn, { backgroundColor: t.accent + "18" }]}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <UserIcon color={t.accent} />
+            <Avatar uri={avatarUri} name={displayName} size={26} />
           </TouchableOpacity>
         </View>
       </View>

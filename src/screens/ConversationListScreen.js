@@ -11,6 +11,8 @@ import {
   Animated,
   Platform,
   Modal,
+  PanResponder,
+  Dimensions,
   ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -202,7 +204,7 @@ function ConfirmDialog({
           style={{
             width: "100%",
             maxWidth: 340,
-            backgroundColor: t.cardBg,
+            backgroundColor: t.bg,
             borderRadius: 16,
             borderWidth: 1,
             borderColor: t.borderColor,
@@ -268,9 +270,66 @@ function ConfirmDialog({
 
 // ─── Account Panel ────────────────────────────────────────────────────────────
 
-function AccountPanel({ visible, onClose, theme: t, onLogout }) {
+function AccountPanel({ visible, onClose, theme: t, onLogout, onProfileUpdated }) {
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(600)).current;
+  const heightAnim = useRef(new Animated.Value(0)).current; // 0 = normal (88%), 1 = expanded (full screen)
+  const expandedRef = useRef(false);
+  const screenHeight = Dimensions.get("window").height;
+  const expandRange = screenHeight * 0.12; // extra height available between 88% and 100%
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 4,
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dy < 0) {
+          // Dragging up: expand toward full screen
+          const base = expandedRef.current ? 1 : 0;
+          const progress = Math.min(
+            1,
+            Math.max(0, base - gesture.dy / expandRange),
+          );
+          heightAnim.setValue(progress);
+        } else if (gesture.dy > 0) {
+          // Dragging down: collapse (if expanded) and/or slide toward dismiss
+          slideAnim.setValue(gesture.dy);
+          if (expandedRef.current) {
+            const progress = Math.max(0, 1 - gesture.dy / expandRange);
+            heightAnim.setValue(progress);
+          }
+        }
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > 100 || gesture.vy > 0.8) {
+          Animated.timing(slideAnim, {
+            toValue: 600,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => onClose());
+          return;
+        }
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          damping: 20,
+          stiffness: 200,
+        }).start();
+
+        if (gesture.dy < -40) {
+          expandedRef.current = true;
+        } else if (gesture.dy > 40) {
+          expandedRef.current = false;
+        }
+        Animated.spring(heightAnim, {
+          toValue: expandedRef.current ? 1 : 0,
+          useNativeDriver: false,
+          damping: 20,
+          stiffness: 200,
+        }).start();
+      },
+    }),
+  ).current;
 
   const [profile, setProfile] = useState({
     display_name: "",
@@ -285,7 +344,9 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
 
   useEffect(() => {
     if (visible) {
-      // Slide up
+      // Slide up, reset to normal (non-expanded) height
+      expandedRef.current = false;
+      heightAnim.setValue(0);
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -299,12 +360,14 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
       userService
         .getProfile()
         .then((p) => {
-          if (p)
+          if (p) {
             setProfile({
               display_name: p.display_name || p.username || "",
               bio: p.bio || "",
               avatar_url: p.avatar_url || "",
             });
+            onProfileUpdated?.(p);
+          }
         })
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
@@ -329,6 +392,7 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
         status: "online",
       });
       setSaved(true);
+      onProfileUpdated?.(profile);
       setTimeout(() => setSaved(false), 3000);
     } catch (e) {
       setError(e.message || "Failed to save profile");
@@ -368,31 +432,25 @@ function AccountPanel({ visible, onClose, theme: t, onLogout }) {
         style={[
           styles.sheet,
           {
-            backgroundColor: t.cardBg,
+            backgroundColor: t.bg,
             borderColor: t.borderColor,
             paddingBottom: insets.bottom + 16,
+            height: heightAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [screenHeight * 0.88, screenHeight],
+            }),
             transform: [{ translateY: slideAnim }],
           },
         ]}
       >
-        <BlurView
-          intensity={t.isDark ? 45 : 65}
-          tint={t.isDark ? "dark" : "light"}
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
-        />
-        {/* Handle bar */}
-        <View style={[styles.handle, { backgroundColor: t.borderColor }]} />
+        {/* Handle bar (drag down to dismiss, drag up to expand) */}
+        <View {...panResponder.panHandlers}>
+          <View style={[styles.handle, { backgroundColor: t.borderColor }]} />
 
-        {/* Header */}
-        <View style={styles.sheetHeader}>
-          <Text style={[styles.sheetTitle, { color: t.text }]}>Account</Text>
-          <TouchableOpacity
-            onPress={onClose}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={[styles.closeBtn, { color: t.textMuted }]}>✕</Text>
-          </TouchableOpacity>
+          {/* Header */}
+          <View style={styles.sheetHeader}>
+            <Text style={[styles.sheetTitle, { color: t.text }]}>Account</Text>
+          </View>
         </View>
 
         <KeyboardAvoidingView
@@ -742,6 +800,14 @@ export default function ConversationListScreen({ navigation }) {
   } = useConversations();
 
   const [accountOpen, setAccountOpen] = useState(false);
+  const [myProfile, setMyProfile] = useState(null);
+
+  useEffect(() => {
+    userService
+      .getProfile()
+      .then((p) => p && setMyProfile(p))
+      .catch(() => {});
+  }, []);
 
   const handleSelectConversation = useCallback(
     (conv) => {
@@ -785,47 +851,50 @@ export default function ConversationListScreen({ navigation }) {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         theme={t}
+        avatarUri={myProfile?.avatar_url}
+        displayName={myProfile?.display_name}
         onThemePress={() => setShowThemePicker((v) => !v)}
         onAccountPress={() => setAccountOpen(true)}
       />
 
       {showThemePicker && (
-        <View
-          style={[
-            styles.themeTrayTop,
-            {
-              top: insets.top + 62,
-              backgroundColor: t.cardBg,
-              borderColor: t.borderColor,
-            },
-          ]}
-        >
-          <BlurView
-            intensity={t.isDark ? 45 : 65}
-            tint={t.isDark ? "dark" : "light"}
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+        <>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowThemePicker(false)}
           />
-          <Text style={[styles.trayLabel, { color: t.textMuted }]}>
-            SELECT THEME
-          </Text>
-          <View style={styles.swatchRow}>
-            {THEME_KEYS.map((key) => (
-              <TouchableOpacity
-                key={key}
-                onPress={() => {
-                  changeTheme(key);
-                  setShowThemePicker(false);
-                }}
-                style={[
-                  styles.swatch,
-                  { backgroundColor: THEME_COLORS[key] },
-                  themeKey === key && styles.swatchActive,
-                ]}
-              />
-            ))}
+          <View
+            style={[
+              styles.themeTrayTop,
+              {
+                top: insets.top + 62,
+                backgroundColor: t.bg,
+                borderColor: t.borderColor,
+              },
+            ]}
+          >
+            <Text style={[styles.trayLabel, { color: t.textMuted }]}>
+              SELECT THEME
+            </Text>
+            <View style={styles.swatchRow}>
+              {THEME_KEYS.map((key) => (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => {
+                    changeTheme(key);
+                    setShowThemePicker(false);
+                  }}
+                  style={[
+                    styles.swatch,
+                    { backgroundColor: THEME_COLORS[key] },
+                    themeKey === key && styles.swatchActive,
+                  ]}
+                />
+              ))}
+            </View>
           </View>
-        </View>
+        </>
       )}
 
       {showSearch ? (
@@ -890,7 +959,7 @@ export default function ConversationListScreen({ navigation }) {
               onRefresh={handleRefresh}
               tintColor={t.accent}
               colors={[t.accent]}
-              progressBackgroundColor={t.cardBg}
+              progressBackgroundColor={t.bg}
             />
           }
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
@@ -904,6 +973,7 @@ export default function ConversationListScreen({ navigation }) {
         onClose={() => setAccountOpen(false)}
         theme={t}
         onLogout={handleLogout}
+        onProfileUpdated={setMyProfile}
       />
     </View>
   );
@@ -1035,7 +1105,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     overflow: "hidden",
-    maxHeight: "88%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.2,

@@ -48,7 +48,7 @@ export default function NewGroupScreen({ navigation }) {
         const timer = setTimeout(async () => {
             setSearching(true);
             try {
-                const data = await apiFetch(`/users/search?q=${encodeURIComponent(query.trim())}`);
+                const data = await apiFetch(`/users/search?query=${encodeURIComponent(query.trim())}`);
                 setResults(Array.isArray(data) ? data : []);
             } catch {
                 setResults([]);
@@ -86,7 +86,22 @@ export default function NewGroupScreen({ navigation }) {
         setCreating(true);
         try {
             const memberIds = selected.map(u => u.user_id || u.id);
-            const group = await conversationService.createGroup(groupName.trim(), memberIds);
+            const result = await conversationService.createGroup(groupName.trim(), memberIds);
+            // The create endpoint only returns { conversation_id }; build a full
+            // conversation object from data we already have so the chat header
+            // shows the group name immediately instead of "Chat".
+            const group = {
+                id: result.conversation_id,
+                conversation_id: result.conversation_id,
+                type: "group",
+                title: groupName.trim(),
+                participants: selected.map(u => ({
+                    user_id: u.user_id || u.id,
+                    username: u.username,
+                    display_name: u.display_name,
+                    avatar_url: u.avatar_url,
+                })),
+            };
             setConversations(prev => {
                 if (prev.some(c => String(c.id) === String(group.id))) return prev;
                 return [group, ...prev];
@@ -151,7 +166,7 @@ export default function NewGroupScreen({ navigation }) {
                 <TextInput
                     value={query}
                     onChangeText={setQuery}
-                    placeholder="Search members to add..."
+                    placeholder="Search to add as a member..."
                     placeholderTextColor={t.textMuted}
                     style={[styles.searchInput, { color: t.text }]}
                     autoCorrect={false}

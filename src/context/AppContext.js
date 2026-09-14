@@ -10,6 +10,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authService } from "../services/auth";
 import { conversationService } from "../services/conversations";
 import { websocketService } from "../services/websocket";
+import {
+  registerForPushNotificationsAsync,
+  registerPushToken,
+} from "../services/notifications";
 import { THEMES } from "../theme/colors";
 
 const AppContext = createContext(null);
@@ -113,6 +117,20 @@ export function AppProvider({ children }) {
     }
   }, [user?.token]); // eslint-disable-line
 
+  // ─── Push notifications: register this device's token once logged in ────
+  useEffect(() => {
+    if (!user?.token) return;
+    let cancelled = false;
+    registerForPushNotificationsAsync().then((pushToken) => {
+      if (!cancelled && pushToken) {
+        registerPushToken(pushToken);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.token]);
+
   // ─── WebSocket: connect once when token available ────────────────────────
   useEffect(() => {
     if (!user?.token) return;
@@ -156,12 +174,12 @@ export function AppProvider({ children }) {
         // Derive a clean text preview
         let preview = "";
         if (msg.content) preview = msg.content;
-        else if (msg.message_type === "image") preview = "📷 Image";
+        else if (msg.message_type === "image") preview = "Image";
         else if (msg.message_type === "voice" || msg.message_type === "audio")
-          preview = "🎤 Voice message";
+          preview = "Voice message";
         else if (msg.message_type === "file")
-          preview = `📎 ${msg.file_name || "File"}`;
-        else if (msg.message_type === "video") preview = "🎥 Video";
+          preview = msg.file_name || "File";
+        else if (msg.message_type === "video") preview = "Video";
 
         setConversations((prev) => {
           const idx = prev.findIndex(

@@ -1,5 +1,9 @@
 import React, { Component } from "react";
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DefaultTheme,
+  createNavigationContainerRef,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import {
@@ -16,6 +20,7 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import * as Updates from "expo-updates";
+import * as Notifications from "expo-notifications";
 import { API_BASE } from "./src/services/api";
 
 // Web-only: hide the OS scrollbar so it doesn't clash with the app's own UI.
@@ -40,6 +45,50 @@ import NewMessageScreen from "./src/screens/NewMessageScreen";
 import NewGroupScreen from "./src/screens/NewGroupScreen";
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
+
+// Watches for a tap on a push notification (both while the app is running and
+// when it's launched fresh from a killed state) and navigates to the matching
+// conversation once it's available in the loaded conversation list.
+function useNotificationNavigation(conversations) {
+  const [pendingConversationId, setPendingConversationId] = React.useState(null);
+
+  React.useEffect(() => {
+    if (Platform.OS === "web") return;
+
+    const extractConversationId = (response) =>
+      response?.notification?.request?.content?.data?.conversation_id;
+
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      const conversationId = extractConversationId(response);
+      if (conversationId) setPendingConversationId(conversationId);
+    });
+
+    const subscription = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        const conversationId = extractConversationId(response);
+        if (conversationId) setPendingConversationId(conversationId);
+      },
+    );
+
+    return () => subscription.remove();
+  }, []);
+
+  React.useEffect(() => {
+    if (!pendingConversationId || !conversations || conversations.length === 0) {
+      return;
+    }
+    if (!navigationRef.isReady()) return;
+
+    const conv = conversations.find(
+      (c) => String(c.id) === String(pendingConversationId),
+    );
+    if (conv) {
+      navigationRef.navigate("Chat", { conversation: conv });
+      setPendingConversationId(null);
+    }
+  }, [pendingConversationId, conversations]);
+}
 
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null };
@@ -109,10 +158,11 @@ class ErrorBoundary extends Component {
 }
 
 import Constants from "expo-constants";
+import * as Application from "expo-application";
 
 // Dynamically read build number from native APK (e.g. versionCode 1, 2, 3...)
 const CURRENT_BUILD_NUMBER = parseInt(
-  Constants.nativeBuildVersion ||
+  Application.nativeBuildVersion ||
     Constants.expoConfig?.android?.versionCode ||
     1,
   10,
@@ -245,8 +295,9 @@ function useSilentOtaUpdates() {
 }
 
 function AppNavigator() {
-  const { user, authLoading, login, theme: t } = useApp();
+  const { user, authLoading, login, theme: t, conversations } = useApp();
   useSilentOtaUpdates();
+  useNotificationNavigation(conversations);
 
   if (authLoading) {
     return (
@@ -288,7 +339,7 @@ function AppNavigator() {
   };
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <StatusBar style={t.isDark ? "light" : "dark"} />
       <UpdateBanner />
       <Stack.Navigator
