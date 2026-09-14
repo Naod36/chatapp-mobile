@@ -154,6 +154,20 @@ function LogoutIcon({ color, size = 20 }) {
   );
 }
 
+function ChevronRightIcon({ color, size = 16 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9 6l6 6-6 6"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 function CameraIcon({ color, size = 16 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -327,12 +341,18 @@ function AccountPanel({
     bio: "",
     avatar_url: "",
   });
+  const [originalProfile, setOriginalProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const hasChanges =
+    originalProfile &&
+    (profile.display_name !== originalProfile.display_name ||
+      profile.bio !== originalProfile.bio);
 
   useEffect(() => {
     if (visible) {
@@ -351,11 +371,13 @@ function AccountPanel({
         .getProfile()
         .then((p) => {
           if (p) {
-            setProfile({
+            const next = {
               display_name: p.display_name || p.username || "",
               bio: p.bio || "",
               avatar_url: p.avatar_url || "",
-            });
+            };
+            setProfile(next);
+            setOriginalProfile(next);
             onProfileUpdated?.(p);
           }
         })
@@ -427,6 +449,7 @@ function AccountPanel({
       const updated = { ...profile, avatar_url: avatarUrl };
       await userService.updateProfile({ ...updated, status: "online" });
       setProfile(updated);
+      setOriginalProfile(updated);
       onProfileUpdated?.(updated);
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to update profile picture");
@@ -445,9 +468,10 @@ function AccountPanel({
         avatar_url: profile.avatar_url,
         status: "online",
       });
+      setOriginalProfile(profile);
       setSaved(true);
       onProfileUpdated?.(profile);
-      setTimeout(() => setSaved(false), 3000);
+      setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       setError(e.message || "Failed to save profile");
     } finally {
@@ -500,6 +524,33 @@ function AccountPanel({
           {/* Header */}
           <View style={styles.sheetHeader}>
             <Text style={[styles.sheetTitle, { color: t.text }]}>Account</Text>
+            {!loading && (
+              <TouchableOpacity
+                onPress={handleSave}
+                disabled={!hasChanges || saving}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                {saving ? (
+                  <ActivityIndicator color={t.accent} size="small" />
+                ) : (
+                  <Text
+                    style={[
+                      styles.headerSaveText,
+                      {
+                        color: saved
+                          ? "#22c55e"
+                          : hasChanges
+                            ? t.accent
+                            : t.textMuted,
+                        opacity: hasChanges || saved ? 1 : 0.45,
+                      },
+                    ]}
+                  >
+                    {saved ? "Saved" : "Save"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -528,7 +579,7 @@ function AccountPanel({
                       : null
                   }
                   name={profile.display_name || "?"}
-                  size={72}
+                  size={64}
                 />
                 {uploadingAvatar ? (
                   <View
@@ -546,12 +597,12 @@ function AccountPanel({
                       { backgroundColor: t.accent, borderColor: t.bg },
                     ]}
                   >
-                    <CameraIcon color="#fff" size={14} />
+                    <CameraIcon color="#fff" size={13} />
                   </View>
                 )}
               </TouchableOpacity>
               <Text style={[styles.avatarHint, { color: t.textMuted }]}>
-                Tap to change your profile picture
+                Tap to change photo
               </Text>
             </View>
 
@@ -559,87 +610,98 @@ function AccountPanel({
               <ActivityIndicator color={t.accent} style={{ marginTop: 24 }} />
             ) : (
               <>
-                {/* Display Name */}
-                <Text style={[styles.fieldLabel, { color: t.textMuted }]}>
-                  Display Name
-                </Text>
-                <TextInput
-                  value={profile.display_name}
-                  onChangeText={(v) =>
-                    setProfile((p) => ({ ...p, display_name: v }))
-                  }
-                  placeholder="Your display name"
-                  placeholderTextColor={t.textMuted}
-                  style={[
-                    styles.input,
-                    {
-                      color: t.text,
-                      backgroundColor: t.inputBg,
-                      borderColor: t.borderColor,
-                    },
-                  ]}
-                  autoCorrect={false}
-                />
-
-                {/* Bio */}
-                <Text style={[styles.fieldLabel, { color: t.textMuted }]}>
-                  Bio
-                </Text>
-                <TextInput
-                  value={profile.bio}
-                  onChangeText={(v) => setProfile((p) => ({ ...p, bio: v }))}
-                  placeholder="Tell people about yourself..."
-                  placeholderTextColor={t.textMuted}
-                  style={[
-                    styles.input,
-                    styles.bioInput,
-                    {
-                      color: t.text,
-                      backgroundColor: t.inputBg,
-                      borderColor: t.borderColor,
-                    },
-                  ]}
-                  multiline
-                  numberOfLines={3}
-                  autoCorrect={false}
-                />
-
                 {/* Error */}
                 {error && <Text style={styles.errorText}>{error}</Text>}
 
-                {/* Save button */}
-                <TouchableOpacity
-                  onPress={handleSave}
-                  disabled={saving}
-                  style={[
-                    styles.saveBtn,
-                    { backgroundColor: t.accent, opacity: saving ? 0.6 : 1 },
-                  ]}
-                  activeOpacity={0.8}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>
-                      {saved ? "✓ Saved!" : "Save Changes"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-
-                {/* Divider */}
+                {/* Profile group */}
+                <Text style={[styles.groupLabel, { color: t.textMuted }]}>
+                  Profile
+                </Text>
                 <View
-                  style={[styles.divider, { backgroundColor: t.borderColor }]}
-                />
-
-                {/* Sign Out */}
-                <TouchableOpacity
-                  onPress={handleLogoutPress}
-                  style={[styles.logoutBtn, { borderColor: "#ef4444" + "40" }]}
-                  activeOpacity={0.8}
+                  style={[
+                    styles.groupCard,
+                    { backgroundColor: t.cardBg, borderColor: t.borderColor },
+                  ]}
                 >
-                  <LogoutIcon color="#ef4444" size={18} />
-                  <Text style={styles.logoutBtnText}>Sign Out</Text>
-                </TouchableOpacity>
+                  <View style={styles.groupRow}>
+                    <Text
+                      style={[styles.groupRowLabel, { color: t.textMuted }]}
+                    >
+                      Name
+                    </Text>
+                    <TextInput
+                      value={profile.display_name}
+                      onChangeText={(v) =>
+                        setProfile((p) => ({ ...p, display_name: v }))
+                      }
+                      placeholder="Your display name"
+                      placeholderTextColor={t.textMuted}
+                      style={[styles.groupInput, { color: t.text }]}
+                      autoCorrect={false}
+                    />
+                  </View>
+                  <View
+                    style={[
+                      styles.groupDivider,
+                      { backgroundColor: t.borderColor },
+                    ]}
+                  />
+                  <View style={[styles.groupRow, styles.groupRowBio]}>
+                    <Text
+                      style={[styles.groupRowLabel, { color: t.textMuted }]}
+                    >
+                      Bio
+                    </Text>
+                    <TextInput
+                      value={profile.bio}
+                      onChangeText={(v) =>
+                        setProfile((p) => ({ ...p, bio: v }))
+                      }
+                      placeholder="Tell people about yourself..."
+                      placeholderTextColor={t.textMuted}
+                      style={[
+                        styles.groupInput,
+                        styles.groupBioInput,
+                        { color: t.text },
+                      ]}
+                      multiline
+                      numberOfLines={2}
+                      autoCorrect={false}
+                    />
+                  </View>
+                </View>
+
+                {/* Session group — more account settings can be added here */}
+                <Text
+                  style={[
+                    styles.groupLabel,
+                    { color: t.textMuted, marginTop: 20 },
+                  ]}
+                >
+                  Session
+                </Text>
+                <View
+                  style={[
+                    styles.groupCard,
+                    { backgroundColor: t.cardBg, borderColor: t.borderColor },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={handleLogoutPress}
+                    style={styles.settingsRow}
+                    activeOpacity={0.6}
+                  >
+                    <View style={styles.settingsRowLeft}>
+                      <LogoutIcon color="#ef4444" size={17} />
+                      <Text
+                        style={[styles.settingsRowText, { color: "#ef4444" }]}
+                      >
+                        Sign Out
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={t.textMuted} size={15} />
+                  </TouchableOpacity>
+                </View>
 
                 {/* App Version & OTA Info */}
                 <OtaInfoPanel theme={t} />
@@ -648,6 +710,7 @@ function AccountPanel({
           </ScrollView>
         </KeyboardAvoidingView>
       </Animated.View>
+
 
       <ConfirmDialog
         visible={showSignOutConfirm}
@@ -1252,25 +1315,46 @@ const styles = StyleSheet.create({
     textAlign: "center",
     opacity: 0.7,
   },
-  fieldLabel: {
-    fontSize: 11,
+  headerSaveText: {
+    fontSize: 15,
     fontWeight: "700",
-    letterSpacing: 0.8,
-    marginBottom: 6,
+  },
+  groupLabel: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    letterSpacing: 0.7,
+    marginBottom: 8,
     textTransform: "uppercase",
   },
-  input: {
+  groupCard: {
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 15,
-    marginBottom: 18,
+    borderRadius: 14,
+    overflow: "hidden",
   },
-  bioInput: {
-    height: 90,
+  groupRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  groupRowBio: {
+    paddingBottom: 12,
+  },
+  groupRowLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    marginBottom: 3,
+  },
+  groupInput: {
+    fontSize: 15,
+    padding: 0,
+    margin: 0,
+  },
+  groupBioInput: {
+    height: 44,
     textAlignVertical: "top",
-    paddingTop: 11,
+  },
+  groupDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 14,
   },
   errorText: {
     color: "#ef4444",
@@ -1278,35 +1362,20 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: "center",
   },
-  saveBtn: {
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  saveBtnText: {
-    color: "#fff",
-    fontWeight: "800",
-    fontSize: 15,
-    letterSpacing: 0.3,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginVertical: 20,
-  },
-  logoutBtn: {
+  settingsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    borderRadius: 14,
-    borderWidth: 1.5,
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
     paddingVertical: 13,
   },
-  logoutBtnText: {
-    color: "#ef4444",
-    fontWeight: "800",
+  settingsRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  settingsRowText: {
     fontSize: 15,
+    fontWeight: "600",
   },
 });
