@@ -4,7 +4,7 @@
     "slug": "chatapp-mobile",
     "scheme": "flowchat",
     "description": "FlowChat - Fast, modern real-time messaging with group chat pinning, voice notes, and seamless multi-device synchronization.",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
