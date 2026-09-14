@@ -31,7 +31,9 @@ function logoGroup(color, scale, cx, cy) {
 function svg(size, { background, logoColor, logoWidth }) {
   const cx = size / 2;
   const cy = size / 2;
-  const bg = background ? `<rect width="${size}" height="${size}" fill="${background}" />` : "";
+  const bg = background
+    ? `<rect width="${size}" height="${size}" fill="${background}" />`
+    : "";
   const logo = logoWidth ? logoGroup(logoColor, logoWidth / 15, cx, cy) : "";
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
     ${bg}
@@ -48,20 +50,46 @@ async function render(name, size, opts) {
 
 async function main() {
   // Main app icon (iOS + universal fallback) — opaque, no transparency.
-  await render("icon.png", 1024, { background: INDIGO, logoColor: WHITE, logoWidth: 620 });
+  await render("icon.png", 1024, {
+    background: INDIGO,
+    logoColor: WHITE,
+    logoWidth: 620,
+  });
 
   // Android adaptive icon layers.
-  await render("android-icon-background.png", 1024, { background: INDIGO, logoColor: INDIGO, logoWidth: 0 });
-  await render("android-icon-foreground.png", 1024, { background: null, logoColor: WHITE, logoWidth: 460 });
-  await render("android-icon-monochrome.png", 1024, { background: null, logoColor: WHITE, logoWidth: 460 });
+  await render("android-icon-background.png", 1024, {
+    background: INDIGO,
+    logoColor: INDIGO,
+    logoWidth: 0,
+  });
+  await render("android-icon-foreground.png", 1024, {
+    background: null,
+    logoColor: WHITE,
+    logoWidth: 460,
+  });
+  await render("android-icon-monochrome.png", 1024, {
+    background: null,
+    logoColor: WHITE,
+    logoWidth: 460,
+  });
 
   // Notification icon — small, flat white silhouette on transparent, generous padding.
-  await render("notification-icon.png", 256, { background: null, logoColor: WHITE, logoWidth: 140 });
+  await render("notification-icon.png", 256, {
+    background: null,
+    logoColor: WHITE,
+    logoWidth: 140,
+  });
 
   // Web favicon.
-  await render("favicon.png", 196, { background: INDIGO, logoColor: WHITE, logoWidth: 118 });
+  await render("favicon.png", 196, {
+    background: INDIGO,
+    logoColor: WHITE,
+    logoWidth: 118,
+  });
 
-  console.log("\nDone. Rebuild the native app (eas build) to see the new app icon;\nOTA updates cannot change native icons.");
+  console.log(
+    "\nDone. Rebuild the native app (eas build) to see the new app icon;\nOTA updates cannot change native icons.",
+  );
 }
 
 main().catch((err) => {
