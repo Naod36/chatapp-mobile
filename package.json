@@ -40,6 +40,7 @@
   },
   "private": true,
   "devDependencies": {
-    "eas-cli": "^24.3.0"
+    "eas-cli": "^24.3.0",
+    "sharp": "^0.35.4"
   }
 }
