@@ -143,7 +143,11 @@ export default function ConversationHeader({
           {syncState === "ready" ? (
             <View style={styles.brandRow}>
               <Image
-                source={require("../../../assets/icon.png")}
+                source={
+                  t.isDark
+                    ? require("../../../assets/logo-mark-dark-theme.png")
+                    : require("../../../assets/logo-mark-light-theme.png")
+                }
                 style={styles.brandLogo}
               />
               <Text style={[styles.appName, { color: t.text }]}>FlowChat</Text>
@@ -239,9 +243,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brandLogo: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 22,
+    height: 22,
   },
   appName: {
     fontSize: 20,

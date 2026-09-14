@@ -15,6 +15,7 @@ const assetsDir = path.join(__dirname, "..", "assets");
 mkdirSync(assetsDir, { recursive: true });
 
 const INDIGO = "#6366f1";
+const INDIGO_DARK_THEME = "#818cf8";
 const WHITE = "#ffffff";
 
 // Brand mark path data, natively centered around (13, 12) in a 24x24 box.
@@ -85,6 +86,19 @@ async function main() {
     background: INDIGO,
     logoColor: WHITE,
     logoWidth: 118,
+  });
+
+  // Header logo marks — transparent background, themed color so the mark
+  // never gets buried against the header background in either theme.
+  await render("logo-mark-light-theme.png", 256, {
+    background: null,
+    logoColor: INDIGO,
+    logoWidth: 175,
+  });
+  await render("logo-mark-dark-theme.png", 256, {
+    background: null,
+    logoColor: INDIGO_DARK_THEME,
+    logoWidth: 175,
   });
 
   console.log(
