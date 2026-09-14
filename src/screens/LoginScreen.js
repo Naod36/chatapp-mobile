@@ -221,7 +221,7 @@ function FlowChatLogo() {
           ]}
         />
       </View>
-      <Text style={styles.brandName}>FlowChat</Text>
+      <Text style={[styles.brandName, { color: THEME.text }]}>FlowChat</Text>
     </View>
   );
 }
@@ -423,7 +423,12 @@ export default function LoginScreen({ onLoginSuccess }) {
           },
         ]}
       >
-        <BlurView intensity={45} tint="dark" pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: -1 }]} />
+        <BlurView
+          intensity={45}
+          tint="dark"
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
+        />
         {/* Logo */}
         {renderFormItem(<FlowChatLogo />, formIndex++)}
 

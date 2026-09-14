@@ -183,7 +183,12 @@ function ConfirmDialog({
 }) {
   if (!visible) return null;
   return (
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={onCancel}>
+    <Modal
+      transparent
+      animationType="fade"
+      visible={visible}
+      onRequestClose={onCancel}
+    >
       <View
         style={{
           flex: 1,
@@ -204,15 +209,42 @@ function ConfirmDialog({
             padding: 20,
           }}
         >
-          <Text style={{ fontSize: 16, fontWeight: "800", color: t.text, marginBottom: 8 }}>
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "800",
+              color: t.text,
+              marginBottom: 8,
+            }}
+          >
             {title}
           </Text>
-          <Text style={{ fontSize: 13, color: t.textMuted, lineHeight: 18, marginBottom: 20 }}>
+          <Text
+            style={{
+              fontSize: 13,
+              color: t.textMuted,
+              lineHeight: 18,
+              marginBottom: 20,
+            }}
+          >
             {message}
           </Text>
-          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 12 }}>
-            <TouchableOpacity onPress={onCancel} style={{ paddingVertical: 8, paddingHorizontal: 14 }}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: t.textMuted }}>{cancelLabel}</Text>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: 12,
+            }}
+          >
+            <TouchableOpacity
+              onPress={onCancel}
+              style={{ paddingVertical: 8, paddingHorizontal: 14 }}
+            >
+              <Text
+                style={{ fontSize: 13, fontWeight: "700", color: t.textMuted }}
+              >
+                {cancelLabel}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onConfirm}
@@ -223,7 +255,9 @@ function ConfirmDialog({
                 backgroundColor: destructive ? "#ef4444" : t.accent,
               }}
             >
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>{confirmLabel}</Text>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
+                {confirmLabel}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -647,7 +681,7 @@ function BottomDock({ theme: t, navigation }) {
             backgroundColor: t.cardBg,
             borderColor: t.borderColor,
             shadowColor: t.isDark ? "#000" : "#aaa",
-            marginBottom: insets.bottom + 10,
+            marginBottom: insets.bottom + 70,
           },
         ]}
       >
@@ -903,11 +937,11 @@ const styles = StyleSheet.create({
     pointerEvents: "box-none",
   },
   dock: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderRadius: 32,
     borderWidth: 1,
     overflow: "hidden",
@@ -917,7 +951,7 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   dockIconBtn: {
-    paddingHorizontal: 6,
+    paddingVertical: 6,
   },
   iconCircle: {
     width: 46,

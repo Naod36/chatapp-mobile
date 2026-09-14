@@ -113,5 +113,5 @@ export const THEMES = {
     dockBorder: "rgba(244, 63, 94, 0.3)",
     chatPaneBg: "#000000",
     isDark: true,
-  }
+  },
 };

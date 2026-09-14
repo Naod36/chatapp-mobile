@@ -123,6 +123,7 @@ function UpdateBanner() {
   if (__DEV__) return null;
 
   const insets = useSafeAreaInsets();
+  const { setUpdateBannerVisible } = useApp();
   const [latestRelease, setLatestRelease] = React.useState(null);
   const [dismissed, setDismissed] = React.useState(false);
 
@@ -137,7 +138,14 @@ function UpdateBanner() {
       .catch(() => {});
   }, []);
 
-  if (!latestRelease || dismissed) return null;
+  const visible = Boolean(latestRelease) && !dismissed;
+
+  React.useEffect(() => {
+    setUpdateBannerVisible(visible);
+    return () => setUpdateBannerVisible(false);
+  }, [visible, setUpdateBannerVisible]);
+
+  if (!visible) return null;
 
   const paddingTop = Math.max(insets.top + 4, 28);
 
