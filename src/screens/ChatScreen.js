@@ -17,6 +17,7 @@ import { useMessages } from "../hooks/useMessages";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
 import ChatHeader from "../components/chat/ChatHeader";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import MessageBubble from "../components/chat/MessageBubble";
 import MessageInput from "../components/chat/MessageInput";
 import PinnedBanner from "../components/chat/PinnedBanner";
@@ -58,6 +59,7 @@ export default function ChatScreen({ route, navigation }) {
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const canBlock = !isGroup && !!otherUserId;
   const [isUserBlocked, setIsUserBlocked] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   useEffect(() => {
     if (!canBlock) return;
@@ -72,6 +74,7 @@ export default function ChatScreen({ route, navigation }) {
   }, [canBlock, otherUserId]);
 
   const handleToggleBlock = useCallback(async () => {
+    setShowBlockConfirm(false);
     try {
       if (isUserBlocked) {
         await userService.unblockUser(otherUserId);
@@ -88,21 +91,8 @@ export default function ChatScreen({ route, navigation }) {
   }, [isUserBlocked, otherUserId]);
 
   const handleMorePress = useCallback(() => {
-    Alert.alert(
-      isUserBlocked ? "Unblock User" : "Block User",
-      isUserBlocked
-        ? "Allow this user to message you again?"
-        : "This user won't be able to message you, and you won't be able to message them.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isUserBlocked ? "Unblock" : "Block",
-          style: "destructive",
-          onPress: handleToggleBlock,
-        },
-      ],
-    );
-  }, [isUserBlocked, handleToggleBlock]);
+    setShowBlockConfirm(true);
+  }, []);
 
   const {
     messages,
@@ -486,6 +476,21 @@ export default function ChatScreen({ route, navigation }) {
           unpinMessage(msg.message_id || msg.id, msg.scope)
         }
         onClose={() => setPinnedListVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={showBlockConfirm}
+        title={isUserBlocked ? "Unblock User" : "Block User"}
+        message={
+          isUserBlocked
+            ? "Allow this user to message you again?"
+            : "This user won't be able to message you, and you won't be able to message them."
+        }
+        confirmLabel={isUserBlocked ? "Unblock" : "Block"}
+        destructive
+        onConfirm={handleToggleBlock}
+        onCancel={() => setShowBlockConfirm(false)}
+        theme={t}
       />
     </KeyboardAvoidingView>
   );

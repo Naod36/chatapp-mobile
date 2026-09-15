@@ -30,6 +30,7 @@ import ConversationHeader from "../components/conversations/ConversationHeader";
 import ConversationItem from "../components/conversations/ConversationItem";
 import EmptyState from "../components/conversations/EmptyState";
 import Avatar from "../components/common/Avatar";
+import ConfirmDialog from "../components/common/ConfirmDialog";
 import otaConfig from "../config/otaVersion.json";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
@@ -168,7 +169,6 @@ function ChevronRightIcon({ color, size = 16 }) {
     </Svg>
   );
 }
-
 function CameraIcon({ color, size = 16 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -200,104 +200,6 @@ const THEME_COLORS = {
   amethystDark: "#7E22CE",
   sunsetOLED: "#E11D48",
 };
-
-// ─── Confirm Dialog (themed replacement for native Alert) ─────────────────────
-
-function ConfirmDialog({
-  visible,
-  title,
-  message,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
-  destructive = false,
-  onConfirm,
-  onCancel,
-  theme: t,
-}) {
-  if (!visible) return null;
-  return (
-    <Modal
-      transparent
-      animationType="fade"
-      visible={visible}
-      onRequestClose={onCancel}
-    >
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.5)",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 24,
-        }}
-      >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 340,
-            backgroundColor: t.bg,
-            borderRadius: 16,
-            borderWidth: 1,
-            borderColor: t.borderColor,
-            padding: 20,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "800",
-              color: t.text,
-              marginBottom: 8,
-            }}
-          >
-            {title}
-          </Text>
-          <Text
-            style={{
-              fontSize: 13,
-              color: t.textMuted,
-              lineHeight: 18,
-              marginBottom: 20,
-            }}
-          >
-            {message}
-          </Text>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              gap: 12,
-            }}
-          >
-            <TouchableOpacity
-              onPress={onCancel}
-              style={{ paddingVertical: 8, paddingHorizontal: 14 }}
-            >
-              <Text
-                style={{ fontSize: 13, fontWeight: "700", color: t.textMuted }}
-              >
-                {cancelLabel}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={onConfirm}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 14,
-                borderRadius: 8,
-                backgroundColor: destructive ? "#ef4444" : t.accent,
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>
-                {confirmLabel}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
 
 // ─── Account Panel ────────────────────────────────────────────────────────────
 
