@@ -15,6 +15,7 @@ import {
   ScrollView,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -349,6 +350,27 @@ function AccountPanel({
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
+
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState(null);
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMessage, setEmailMessage] = useState(null);
+
+  const [showBlockedList, setShowBlockedList] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockedLoading, setBlockedLoading] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   const hasChanges =
     originalProfile &&
     (profile.display_name !== originalProfile.display_name ||
@@ -378,6 +400,7 @@ function AccountPanel({
             };
             setProfile(next);
             setOriginalProfile(next);
+            setNotificationsEnabled(p.notifications_enabled !== false);
             onProfileUpdated?.(p);
           }
         })
@@ -487,6 +510,107 @@ function AccountPanel({
     setShowSignOutConfirm(false);
     onClose();
     onLogout();
+  };
+
+  const handleToggleNotifications = async (value) => {
+    setNotificationsEnabled(value);
+    setNotifSaving(true);
+    try {
+      await userService.updateNotificationPreference(value);
+    } catch (e) {
+      setNotificationsEnabled(!value);
+      Alert.alert("Error", e.message || "Failed to update notification preference");
+    } finally {
+      setNotifSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordMessage(null);
+    if (newPassword.length < 8) {
+      setPasswordMessage({ type: "error", text: "Password must be at least 8 characters" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: "error", text: "Passwords do not match" });
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await userService.changePassword(newPassword);
+      setPasswordMessage({ type: "success", text: "Password updated" });
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        setShowPasswordForm(false);
+        setPasswordMessage(null);
+      }, 1500);
+    } catch (e) {
+      setPasswordMessage({ type: "error", text: e.message || "Failed to update password" });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleRequestEmailChange = async () => {
+    setEmailMessage(null);
+    const trimmed = newEmail.trim();
+    if (!trimmed || !trimmed.includes("@")) {
+      setEmailMessage({ type: "error", text: "Enter a valid email address" });
+      return;
+    }
+    setEmailSaving(true);
+    try {
+      await userService.requestEmailChange(trimmed);
+      setEmailMessage({
+        type: "success",
+        text: "Check your new inbox for a confirmation link",
+      });
+      setNewEmail("");
+    } catch (e) {
+      setEmailMessage({ type: "error", text: e.message || "Failed to request email change" });
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handleToggleBlockedList = async () => {
+    const opening = !showBlockedList;
+    setShowBlockedList(opening);
+    if (opening) {
+      setBlockedLoading(true);
+      try {
+        const list = await userService.getBlockedUsers();
+        setBlockedUsers(list || []);
+      } catch (e) {
+        Alert.alert("Error", e.message || "Failed to load blocked users");
+      } finally {
+        setBlockedLoading(false);
+      }
+    }
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      await userService.unblockUser(userId);
+      setBlockedUsers((prev) => prev.filter((u) => u.user_id !== userId));
+    } catch (e) {
+      Alert.alert("Error", e.message || "Failed to unblock user");
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    try {
+      await userService.deleteAccount();
+      setShowDeleteConfirm(false);
+      onClose();
+      onLogout();
+    } catch (e) {
+      setDeletingAccount(false);
+      Alert.alert("Error", e.message || "Failed to delete account");
+    }
   };
 
   if (!visible) return null;
@@ -671,6 +795,230 @@ function AccountPanel({
                   </View>
                 </View>
 
+                {/* Preferences group */}
+                <Text
+                  style={[
+                    styles.groupLabel,
+                    { color: t.textMuted, marginTop: 20 },
+                  ]}
+                >
+                  Preferences
+                </Text>
+                <View
+                  style={[
+                    styles.groupCard,
+                    { backgroundColor: t.cardBg, borderColor: t.borderColor },
+                  ]}
+                >
+                  <View style={styles.settingsRow}>
+                    <View style={styles.settingsRowLeft}>
+                      <Text style={[styles.settingsRowText, { color: t.text }]}>
+                        Push Notifications
+                      </Text>
+                    </View>
+                    <Switch
+                      value={notificationsEnabled}
+                      onValueChange={handleToggleNotifications}
+                      disabled={notifSaving}
+                      trackColor={{ false: t.borderColor, true: t.accent }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                </View>
+
+                {/* Privacy & Security group */}
+                <Text
+                  style={[
+                    styles.groupLabel,
+                    { color: t.textMuted, marginTop: 20 },
+                  ]}
+                >
+                  Privacy &amp; Security
+                </Text>
+                <View
+                  style={[
+                    styles.groupCard,
+                    { backgroundColor: t.cardBg, borderColor: t.borderColor },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={() => setShowPasswordForm((v) => !v)}
+                    style={styles.settingsRow}
+                    activeOpacity={0.6}
+                  >
+                    <View style={styles.settingsRowLeft}>
+                      <Text style={[styles.settingsRowText, { color: t.text }]}>
+                        Change Password
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={t.textMuted} size={15} />
+                  </TouchableOpacity>
+
+                  {showPasswordForm && (
+                    <View style={styles.inlineFormWrap}>
+                      <TextInput
+                        value={newPassword}
+                        onChangeText={setNewPassword}
+                        placeholder="New password"
+                        placeholderTextColor={t.textMuted}
+                        secureTextEntry
+                        style={[styles.groupInput, { color: t.text }]}
+                      />
+                      <View
+                        style={[
+                          styles.groupDivider,
+                          { backgroundColor: t.borderColor, marginVertical: 8 },
+                        ]}
+                      />
+                      <TextInput
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        placeholder="Confirm new password"
+                        placeholderTextColor={t.textMuted}
+                        secureTextEntry
+                        style={[styles.groupInput, { color: t.text }]}
+                      />
+                      {passwordMessage && (
+                        <Text
+                          style={[
+                            styles.inlineFormMessage,
+                            {
+                              color:
+                                passwordMessage.type === "error"
+                                  ? "#ef4444"
+                                  : "#22c55e",
+                            },
+                          ]}
+                        >
+                          {passwordMessage.text}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        onPress={handleChangePassword}
+                        disabled={passwordSaving}
+                        style={[
+                          styles.inlineFormBtn,
+                          { backgroundColor: t.accent, opacity: passwordSaving ? 0.6 : 1 },
+                        ]}
+                      >
+                        {passwordSaving ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.inlineFormBtnText}>Update Password</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <View
+                    style={[styles.groupDivider, { backgroundColor: t.borderColor }]}
+                  />
+
+                  <TouchableOpacity
+                    onPress={() => setShowEmailForm((v) => !v)}
+                    style={styles.settingsRow}
+                    activeOpacity={0.6}
+                  >
+                    <View style={styles.settingsRowLeft}>
+                      <Text style={[styles.settingsRowText, { color: t.text }]}>
+                        Change Email
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={t.textMuted} size={15} />
+                  </TouchableOpacity>
+
+                  {showEmailForm && (
+                    <View style={styles.inlineFormWrap}>
+                      <TextInput
+                        value={newEmail}
+                        onChangeText={setNewEmail}
+                        placeholder="New email address"
+                        placeholderTextColor={t.textMuted}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={[styles.groupInput, { color: t.text }]}
+                      />
+                      {emailMessage && (
+                        <Text
+                          style={[
+                            styles.inlineFormMessage,
+                            {
+                              color:
+                                emailMessage.type === "error"
+                                  ? "#ef4444"
+                                  : "#22c55e",
+                            },
+                          ]}
+                        >
+                          {emailMessage.text}
+                        </Text>
+                      )}
+                      <TouchableOpacity
+                        onPress={handleRequestEmailChange}
+                        disabled={emailSaving}
+                        style={[
+                          styles.inlineFormBtn,
+                          { backgroundColor: t.accent, opacity: emailSaving ? 0.6 : 1 },
+                        ]}
+                      >
+                        {emailSaving ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.inlineFormBtnText}>Send Confirmation</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <View
+                    style={[styles.groupDivider, { backgroundColor: t.borderColor }]}
+                  />
+
+                  <TouchableOpacity
+                    onPress={handleToggleBlockedList}
+                    style={styles.settingsRow}
+                    activeOpacity={0.6}
+                  >
+                    <View style={styles.settingsRowLeft}>
+                      <Text style={[styles.settingsRowText, { color: t.text }]}>
+                        Blocked Users
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={t.textMuted} size={15} />
+                  </TouchableOpacity>
+
+                  {showBlockedList && (
+                    <View style={styles.inlineFormWrap}>
+                      {blockedLoading ? (
+                        <ActivityIndicator color={t.accent} />
+                      ) : blockedUsers.length === 0 ? (
+                        <Text style={{ color: t.textMuted, fontSize: 13 }}>
+                          You haven't blocked anyone.
+                        </Text>
+                      ) : (
+                        blockedUsers.map((u) => (
+                          <View key={u.user_id} style={styles.blockedRow}>
+                            <Text
+                              style={{ color: t.text, fontSize: 14, flex: 1 }}
+                              numberOfLines={1}
+                            >
+                              {u.display_name || u.username}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={() => handleUnblockUser(u.user_id)}
+                            >
+                              <Text style={{ color: t.accent, fontSize: 13, fontWeight: "700" }}>
+                                Unblock
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  )}
+                </View>
+
                 {/* Session group — more account settings can be added here */}
                 <Text
                   style={[
@@ -703,6 +1051,37 @@ function AccountPanel({
                   </TouchableOpacity>
                 </View>
 
+                {/* Danger zone */}
+                <Text
+                  style={[
+                    styles.groupLabel,
+                    { color: t.textMuted, marginTop: 20 },
+                  ]}
+                >
+                  Danger Zone
+                </Text>
+                <View
+                  style={[
+                    styles.groupCard,
+                    { backgroundColor: t.cardBg, borderColor: t.borderColor },
+                  ]}
+                >
+                  <TouchableOpacity
+                    onPress={() => setShowDeleteConfirm(true)}
+                    style={styles.settingsRow}
+                    activeOpacity={0.6}
+                  >
+                    <View style={styles.settingsRowLeft}>
+                      <Text
+                        style={[styles.settingsRowText, { color: "#ef4444" }]}
+                      >
+                        Delete Account
+                      </Text>
+                    </View>
+                    <ChevronRightIcon color={t.textMuted} size={15} />
+                  </TouchableOpacity>
+                </View>
+
                 {/* App Version & OTA Info */}
                 <OtaInfoPanel theme={t} />
               </>
@@ -719,6 +1098,17 @@ function AccountPanel({
         destructive
         onConfirm={handleConfirmLogout}
         onCancel={() => setShowSignOutConfirm(false)}
+        theme={t}
+      />
+
+      <ConfirmDialog
+        visible={showDeleteConfirm}
+        title="Delete Account"
+        message="This will deactivate your account and log you out. Are you sure?"
+        confirmLabel={deletingAccount ? "Deleting..." : "Delete Account"}
+        destructive
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setShowDeleteConfirm(false)}
         theme={t}
       />
     </Modal>
@@ -1376,5 +1766,30 @@ const styles = StyleSheet.create({
   settingsRowText: {
     fontSize: 15,
     fontWeight: "600",
+  },
+  inlineFormWrap: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  },
+  inlineFormMessage: {
+    fontSize: 12.5,
+    marginTop: 8,
+  },
+  inlineFormBtn: {
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 10,
+  },
+  inlineFormBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  blockedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
   },
 });
