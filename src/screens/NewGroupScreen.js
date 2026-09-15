@@ -15,6 +15,7 @@ import { useApp } from "../context/AppContext";
 import Avatar from "../components/common/Avatar";
 import { apiFetch } from "../services/api";
 import { conversationService } from "../services/conversations";
+import { redactUser } from "../utils/blockPolicy";
 
 function BackIcon({ color }) {
   return (
@@ -57,7 +58,8 @@ function CheckIcon({ color }) {
 }
 
 export default function NewGroupScreen({ navigation }) {
-  const { theme: t, setConversations } = useApp();
+  const { theme: t, setConversations, isBlockedBy, blockStateReady, blockStateVersion } = useApp();
+  const visibleUser = (person) => redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity));
   const insets = useSafeAreaInsets();
   const [groupName, setGroupName] = useState("");
   const [query, setQuery] = useState("");
@@ -86,7 +88,7 @@ export default function NewGroupScreen({ navigation }) {
       }
     }, 350);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, blockStateVersion]);
 
   const toggleUser = useCallback((userItem) => {
     const uid = String(userItem.user_id || userItem.id);
@@ -218,7 +220,7 @@ export default function NewGroupScreen({ navigation }) {
               onPress={() => toggleUser(u)}
             >
               <Text style={[styles.chipText, { color: t.accent }]}>
-                {u.display_name || u.username} ×
+                {visibleUser(u).display_name || visibleUser(u).username} ×
               </Text>
             </TouchableOpacity>
           ))}
@@ -262,7 +264,7 @@ export default function NewGroupScreen({ navigation }) {
         />
       ) : (
         <FlatList
-          data={results}
+          data={results.map(visibleUser)}
           keyExtractor={(item) => String(item.user_id || item.id)}
           renderItem={({ item }) => {
             const sel = isSelected(item);
@@ -290,7 +292,7 @@ export default function NewGroupScreen({ navigation }) {
                     styles.checkCircle,
                     {
                       borderColor: sel ? t.accent : t.borderColor,
-                      backgroundColor: sel ? t.accent : "transparent",
+                      backgroundColor: sel ? t.buttonBg : "transparent",
                     },
                   ]}
                 >

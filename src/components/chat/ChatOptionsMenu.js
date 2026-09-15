@@ -14,7 +14,6 @@ export default function ChatOptionsMenu({
   onToggleBlock,
   isPinned,
   onTogglePin,
-  onSearch,
 }) {
   const insets = useSafeAreaInsets();
   if (!visible) return null;
@@ -46,16 +45,6 @@ export default function ChatOptionsMenu({
           activeOpacity={0.6}
           onPress={() => {
             onClose();
-            onSearch();
-          }}
-        >
-          <Text style={[styles.rowText, { color: t.text }]}>Search Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.row}
-          activeOpacity={0.6}
-          onPress={() => {
-            onClose();
             onTogglePin();
           }}
         >
@@ -71,7 +60,7 @@ export default function ChatOptionsMenu({
             onToggleBlock();
           }}
         >
-          <Text style={[styles.rowText, { color: "#ef4444" }]}>
+          <Text style={[styles.rowText, { color: t.danger }]}>
             {isBlocked ? "Unblock User" : "Block User"}
           </Text>
         </TouchableOpacity>

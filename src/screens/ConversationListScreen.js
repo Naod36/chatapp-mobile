@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -188,21 +189,6 @@ function CameraIcon({ color, size = 16 }) {
 
 // ─── Theme Quick Picker ────────────────────────────────────────────────────────
 
-const THEME_KEYS = [
-  "light",
-  "dark",
-  "emeraldDark",
-  "amethystDark",
-  "sunsetOLED",
-];
-const THEME_COLORS = {
-  light: "#f8fafc",
-  dark: "#0f172a",
-  emeraldDark: "#047857",
-  amethystDark: "#7E22CE",
-  sunsetOLED: "#E11D48",
-};
-
 // ─── Account Panel ────────────────────────────────────────────────────────────
 
 function AccountPanel({
@@ -212,6 +198,7 @@ function AccountPanel({
   onLogout,
   onProfileUpdated,
 }) {
+  const { unblockUser, isBlockedBy, blockedUserIds, blockStateVersion, blockStateReady, changeTheme } = useApp();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const slideAnim = useRef(new Animated.Value(600)).current;
@@ -272,6 +259,16 @@ function AccountPanel({
   const [showBlockedList, setShowBlockedList] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [blockedLoading, setBlockedLoading] = useState(false);
+  const [unblockingUserId, setUnblockingUserId] = useState(null);
+
+  useEffect(() => {
+    if (!visible || !showBlockedList) return;
+    let cancelled = false;
+    userService.getBlockedUsers().then((list) => {
+      if (!cancelled) setBlockedUsers(list || []);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [visible, showBlockedList, blockStateVersion]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -424,7 +421,10 @@ function AccountPanel({
       await userService.updateNotificationPreference(value);
     } catch (e) {
       setNotificationsEnabled(!value);
-      Alert.alert("Error", e.message || "Failed to update notification preference");
+      Alert.alert(
+        "Error",
+        e.message || "Failed to update notification preference",
+      );
     } finally {
       setNotifSaving(false);
     }
@@ -433,7 +433,10 @@ function AccountPanel({
   const handleChangePassword = async () => {
     setPasswordMessage(null);
     if (newPassword.length < 8) {
-      setPasswordMessage({ type: "error", text: "Password must be at least 8 characters" });
+      setPasswordMessage({
+        type: "error",
+        text: "Password must be at least 8 characters",
+      });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -451,7 +454,10 @@ function AccountPanel({
         setPasswordMessage(null);
       }, 1500);
     } catch (e) {
-      setPasswordMessage({ type: "error", text: e.message || "Failed to update password" });
+      setPasswordMessage({
+        type: "error",
+        text: e.message || "Failed to update password",
+      });
     } finally {
       setPasswordSaving(false);
     }
@@ -473,7 +479,10 @@ function AccountPanel({
       });
       setNewEmail("");
     } catch (e) {
-      setEmailMessage({ type: "error", text: e.message || "Failed to request email change" });
+      setEmailMessage({
+        type: "error",
+        text: e.message || "Failed to request email change",
+      });
     } finally {
       setEmailSaving(false);
     }
@@ -496,11 +505,15 @@ function AccountPanel({
   };
 
   const handleUnblockUser = async (userId) => {
+    if (unblockingUserId) return;
+    setUnblockingUserId(String(userId));
     try {
-      await userService.unblockUser(userId);
-      setBlockedUsers((prev) => prev.filter((u) => u.user_id !== userId));
+      await unblockUser(userId);
+      setBlockedUsers((prev) => prev.filter((u) => String(u.user_id) !== String(userId)));
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to unblock user");
+    } finally {
+      setUnblockingUserId(null);
     }
   };
 
@@ -568,7 +581,7 @@ function AccountPanel({
                       styles.headerSaveText,
                       {
                         color: saved
-                          ? "#22c55e"
+                          ? t.success
                           : hasChanges
                             ? t.accent
                             : t.textMuted,
@@ -597,6 +610,8 @@ function AccountPanel({
           >
             {/* Avatar */}
             <View style={styles.avatarRow}>
+              <View style={{ width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <View style={{ width: 44 }} />
               <TouchableOpacity
                 onPress={handlePickAvatar}
                 disabled={uploadingAvatar}
@@ -627,13 +642,23 @@ function AccountPanel({
                   <View
                     style={[
                       styles.avatarBadge,
-                      { backgroundColor: t.accent, borderColor: t.bg },
+                      { backgroundColor: t.buttonBg, borderColor: t.bg },
                     ]}
                   >
                     <CameraIcon color="#fff" size={13} />
                   </View>
                 )}
               </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => changeTheme(t.isDark ? "light" : "dark")}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.isDark ? "Switch to light theme" : "Switch to dark theme"}
+                  {...(Platform.OS === "web" ? { title: t.isDark ? "Switch to light theme" : "Switch to dark theme" } : {})}
+                  style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: t.accent + "18" }}
+                >
+                  {t.isDark ? <SunIcon color={t.accent} /> : <MoonIcon color={t.accent} />}
+                </TouchableOpacity>
+              </View>
               <Text style={[styles.avatarHint, { color: t.textMuted }]}>
                 Tap to change photo
               </Text>
@@ -644,7 +669,7 @@ function AccountPanel({
             ) : (
               <>
                 {/* Error */}
-                {error && <Text style={styles.errorText}>{error}</Text>}
+                {error && <Text style={[styles.errorText, { color: t.danger }]}>{error}</Text>}
 
                 {/* Profile group */}
                 <Text style={[styles.groupLabel, { color: t.textMuted }]}>
@@ -794,8 +819,8 @@ function AccountPanel({
                             {
                               color:
                                 passwordMessage.type === "error"
-                                  ? "#ef4444"
-                                  : "#22c55e",
+                                  ? t.danger
+                                  : t.success,
                             },
                           ]}
                         >
@@ -807,20 +832,28 @@ function AccountPanel({
                         disabled={passwordSaving}
                         style={[
                           styles.inlineFormBtn,
-                          { backgroundColor: t.accent, opacity: passwordSaving ? 0.6 : 1 },
+                          {
+                            backgroundColor: t.buttonBg,
+                            opacity: passwordSaving ? 0.6 : 1,
+                          },
                         ]}
                       >
                         {passwordSaving ? (
                           <ActivityIndicator color="#fff" size="small" />
                         ) : (
-                          <Text style={styles.inlineFormBtnText}>Update Password</Text>
+                          <Text style={styles.inlineFormBtnText}>
+                            Update Password
+                          </Text>
                         )}
                       </TouchableOpacity>
                     </View>
                   )}
 
                   <View
-                    style={[styles.groupDivider, { backgroundColor: t.borderColor }]}
+                    style={[
+                      styles.groupDivider,
+                      { backgroundColor: t.borderColor },
+                    ]}
                   />
 
                   <TouchableOpacity
@@ -855,8 +888,8 @@ function AccountPanel({
                             {
                               color:
                                 emailMessage.type === "error"
-                                  ? "#ef4444"
-                                  : "#22c55e",
+                                  ? t.danger
+                                  : t.success,
                             },
                           ]}
                         >
@@ -868,20 +901,28 @@ function AccountPanel({
                         disabled={emailSaving}
                         style={[
                           styles.inlineFormBtn,
-                          { backgroundColor: t.accent, opacity: emailSaving ? 0.6 : 1 },
+                          {
+                            backgroundColor: t.buttonBg,
+                            opacity: emailSaving ? 0.6 : 1,
+                          },
                         ]}
                       >
                         {emailSaving ? (
                           <ActivityIndicator color="#fff" size="small" />
                         ) : (
-                          <Text style={styles.inlineFormBtnText}>Send Confirmation</Text>
+                          <Text style={styles.inlineFormBtnText}>
+                            Send Confirmation
+                          </Text>
                         )}
                       </TouchableOpacity>
                     </View>
                   )}
 
                   <View
-                    style={[styles.groupDivider, { backgroundColor: t.borderColor }]}
+                    style={[
+                      styles.groupDivider,
+                      { backgroundColor: t.borderColor },
+                    ]}
                   />
 
                   <TouchableOpacity
@@ -906,18 +947,25 @@ function AccountPanel({
                           You haven't blocked anyone.
                         </Text>
                       ) : (
-                        blockedUsers.map((u) => (
+                        blockedUsers.filter((person) => blockedUserIds.includes(String(person.user_id))).map((u) => (
                           <View key={u.user_id} style={styles.blockedRow}>
                             <Text
                               style={{ color: t.text, fontSize: 14, flex: 1 }}
                               numberOfLines={1}
                             >
-                              {u.display_name || u.username}
+                              {!blockStateReady || isBlockedBy(u.user_id) ? "Person Not Available" : u.display_name || u.username}
                             </Text>
                             <TouchableOpacity
                               onPress={() => handleUnblockUser(u.user_id)}
+                              disabled={!!unblockingUserId}
                             >
-                              <Text style={{ color: t.accent, fontSize: 13, fontWeight: "700" }}>
+                              <Text
+                                style={{
+                                  color: t.accent,
+                                  fontSize: 13,
+                                  fontWeight: "700",
+                                }}
+                              >
                                 Unblock
                               </Text>
                             </TouchableOpacity>
@@ -949,9 +997,9 @@ function AccountPanel({
                     activeOpacity={0.6}
                   >
                     <View style={styles.settingsRowLeft}>
-                      <LogoutIcon color="#ef4444" size={17} />
+                      <LogoutIcon color={t.danger} size={17} />
                       <Text
-                        style={[styles.settingsRowText, { color: "#ef4444" }]}
+                        style={[styles.settingsRowText, { color: t.danger }]}
                       >
                         Sign Out
                       </Text>
@@ -982,7 +1030,7 @@ function AccountPanel({
                   >
                     <View style={styles.settingsRowLeft}>
                       <Text
-                        style={[styles.settingsRowText, { color: "#ef4444" }]}
+                        style={[styles.settingsRowText, { color: t.danger }]}
                       >
                         Delete Account
                       </Text>
@@ -1151,7 +1199,7 @@ function OtaInfoPanel({ theme: t }) {
           style={{
             fontSize: 10.5,
             marginTop: 6,
-            color: state === "error" ? "#ef4444" : t.textMuted,
+            color: state === "error" ? t.danger : t.textMuted,
           }}
         >
           {message}
@@ -1219,9 +1267,7 @@ function BottomDock({ theme: t, navigation }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ConversationListScreen({ navigation }) {
-  const { theme: t, logout, changeTheme, themeKey } = useApp();
-  const insets = useSafeAreaInsets();
-  const [showThemePicker, setShowThemePicker] = useState(false);
+  const { theme: t, logout } = useApp();
   const [refreshing, setRefreshing] = useState(false);
   const {
     conversations,
@@ -1247,11 +1293,16 @@ export default function ConversationListScreen({ navigation }) {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    let active = true;
     AsyncStorage.getItem("@flowchat_pinned_conversations")
-      .then((raw) => setPinnedConversationIds(raw ? JSON.parse(raw) : []))
+      .then((raw) => {
+        const ids = raw ? JSON.parse(raw) : [];
+        if (active) setPinnedConversationIds(Array.isArray(ids) ? ids.map(String) : []);
+      })
       .catch(() => {});
-  }, []);
+    return () => { active = false; };
+  }, []));
 
   const handleSelectConversation = useCallback(
     (conv) => {
@@ -1291,55 +1342,14 @@ export default function ConversationListScreen({ navigation }) {
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
       <ConversationHeader
-        syncState={syncState}
+        syncState={refreshing ? "refreshing" : syncState}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         theme={t}
         avatarUri={myProfile?.avatar_url}
         displayName={myProfile?.display_name}
-        onThemePress={() => setShowThemePicker((v) => !v)}
         onAccountPress={() => setAccountOpen(true)}
       />
-
-      {showThemePicker && (
-        <>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowThemePicker(false)}
-          />
-          <View
-            style={[
-              styles.themeTrayTop,
-              {
-                top: insets.top + 62,
-                backgroundColor: t.bg,
-                borderColor: t.borderColor,
-              },
-            ]}
-          >
-            <Text style={[styles.trayLabel, { color: t.textMuted }]}>
-              SELECT THEME
-            </Text>
-            <View style={styles.swatchRow}>
-              {THEME_KEYS.map((key) => (
-                <TouchableOpacity
-                  key={key}
-                  onPress={() => {
-                    changeTheme(key);
-                    setShowThemePicker(false);
-                  }}
-                  style={[
-                    styles.swatch,
-                    { backgroundColor: THEME_COLORS[key] },
-                    themeKey === key && styles.swatchActive,
-                  ]}
-                />
-              ))}
-            </View>
-          </View>
-        </>
-      )}
 
       {showSearch ? (
         <FlatList
@@ -1381,8 +1391,12 @@ export default function ConversationListScreen({ navigation }) {
       ) : (
         <FlatList
           data={[...conversations].sort((a, b) => {
-            const aPinned = pinnedConversationIds.includes(String(a.id || a.conversation_id));
-            const bPinned = pinnedConversationIds.includes(String(b.id || b.conversation_id));
+            const aPinned = pinnedConversationIds.includes(
+              String(a.id || a.conversation_id),
+            );
+            const bPinned = pinnedConversationIds.includes(
+              String(b.id || b.conversation_id),
+            );
             return Number(bPinned) - Number(aPinned);
           })}
           extraData={typingMap}
@@ -1392,6 +1406,7 @@ export default function ConversationListScreen({ navigation }) {
             return (
               <ConversationItem
                 conversation={item}
+                isPinned={pinnedConversationIds.includes(cid)}
                 onPress={() => handleSelectConversation(item)}
                 isTyping={Boolean(typingMap[cid])}
               />

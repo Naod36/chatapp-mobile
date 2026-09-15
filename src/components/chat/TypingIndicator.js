@@ -1,8 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, Animated } from "react-native";
 
-const TYPING_GREEN = "#22c55e";
-
 function useBounceDot(delay) {
   const value = useRef(new Animated.Value(0)).current;
 
@@ -34,7 +32,7 @@ function useBounceDot(delay) {
   return value;
 }
 
-function Dot({ delay }) {
+function Dot({ delay, color }) {
   const value = useBounceDot(delay);
   const translateY = value.interpolate({
     inputRange: [0, 1],
@@ -47,7 +45,7 @@ function Dot({ delay }) {
 
   return (
     <Animated.View
-      style={[styles.dot, { opacity, transform: [{ translateY }] }]}
+      style={[styles.dot, { backgroundColor: color, opacity, transform: [{ translateY }] }]}
     />
   );
 }
@@ -63,9 +61,9 @@ export default function TypingIndicator({ username, theme: t }) {
   return (
     <View style={styles.wrap}>
       <View style={[styles.bubble, { backgroundColor: t.otherBubbleBg }]}>
-        <Dot delay={0} />
-        <Dot delay={200} />
-        <Dot delay={400} />
+        <Dot delay={0} color={t.success} />
+        <Dot delay={200} color={t.success} />
+        <Dot delay={400} color={t.success} />
       </View>
     </View>
   );
@@ -90,6 +88,5 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: TYPING_GREEN,
   },
 });

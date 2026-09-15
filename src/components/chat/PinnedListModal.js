@@ -99,16 +99,14 @@ export default function PinnedListModal({
                       style={[
                         styles.scopeBadge,
                         {
-                          backgroundColor: isPersonal
-                            ? "#6366f120"
-                            : "#10b98120",
+                          backgroundColor: t.cardBg,
                         },
                       ]}
                     >
                       <Text
                         style={[
                           styles.scopeText,
-                          { color: isPersonal ? "#6366f1" : "#10b981" },
+                          { color: t.accent },
                         ]}
                       >
                         {isPersonal ? "Personal" : "Shared"}
@@ -126,7 +124,8 @@ export default function PinnedListModal({
 
                 <TouchableOpacity
                   style={styles.unpinBtn}
-                  onPress={() => onUnpinMessage(item)}
+                  disabled={!onUnpinMessage}
+                  onPress={() => onUnpinMessage?.(item)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Text

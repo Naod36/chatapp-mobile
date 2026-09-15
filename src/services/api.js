@@ -88,11 +88,22 @@ export async function apiFetch(endpoint, options = {}) {
     }
 }
 
-export async function uploadFileWithProgress(formData, onProgress) {
+export async function uploadFileWithProgress(formData, onProgress, signal = null) {
     const token = await AsyncStorage.getItem("chat_token");
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        const abort = () => xhr.abort();
+        const cleanup = () => signal?.removeEventListener("abort", abort);
+        if (signal?.aborted) {
+            reject(new Error("Upload cancelled."));
+            return;
+        }
+        signal?.addEventListener("abort", abort);
+        xhr.onabort = () => {
+            cleanup();
+            reject(new Error("Upload cancelled."));
+        };
 
         if (xhr.upload && onProgress) {
             xhr.upload.onprogress = (event) => {
@@ -115,6 +126,7 @@ export async function uploadFileWithProgress(formData, onProgress) {
         }
 
         xhr.onload = () => {
+            cleanup();
             let data;
             const contentType = xhr.getResponseHeader("content-type");
             if (contentType && contentType.includes("application/json")) {
@@ -136,6 +148,7 @@ export async function uploadFileWithProgress(formData, onProgress) {
         };
 
         xhr.onerror = () => {
+            cleanup();
             reject(new Error("Network error during file upload. Please check your connection."));
         };
 

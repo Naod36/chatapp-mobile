@@ -74,7 +74,7 @@ export default function PinnedBanner({
             <Text
               style={[
                 styles.scopeTag,
-                { color: isPersonal ? "#6366f1" : "#10b981" },
+                { color: t.accent },
               ]}
             >
               {isPersonal ? "• Personal" : "• Shared"}
@@ -100,6 +100,7 @@ export default function PinnedBanner({
       {/* Unpin current */}
       <TouchableOpacity
         onPress={() => onUnpinActive?.(message)}
+        disabled={!onUnpinActive}
         style={styles.actionBtn}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >

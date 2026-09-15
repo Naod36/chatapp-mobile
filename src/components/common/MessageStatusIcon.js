@@ -1,6 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { THEMES } from "../../theme/colors";
 
 /**
  * MessageStatusIcon — renders tick icons for message delivery status.
@@ -8,11 +9,12 @@ import Svg, { Path } from "react-native-svg";
  * Props: status ("sending"|"sent"|"delivered"|"read"), isOwn, isDark
  */
 export default function MessageStatusIcon({ status, isOwn, isDark = false }) {
+  const theme = isDark ? THEMES.dark : THEMES.light;
   if (!isOwn) return null;
 
   if (status === "sending") {
     // Clock
-    const color = isDark ? "rgba(180,180,180,0.6)" : "rgba(255,255,255,0.7)";
+    const color = theme.textMuted;
     return (
       <Svg
         width="12"
@@ -38,13 +40,7 @@ export default function MessageStatusIcon({ status, isOwn, isDark = false }) {
   }
 
   const isRead = status === "read";
-  const color = isRead
-    ? isDark
-      ? "#818cf8"
-      : "#a5f3fc"
-    : isDark
-      ? "rgba(180,180,180,0.75)"
-      : "rgba(255,255,255,0.75)";
+  const color = isRead ? theme.accent : theme.textMuted;
 
   if (status === "sent") {
     // Single tick

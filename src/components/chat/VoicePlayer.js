@@ -199,7 +199,7 @@ export default function VoicePlayer({ src, isOwn, theme: t }) {
     const progressRatio = durationMillis ? positionMillis / durationMillis : 0;
     const activeBarsCount = Math.floor(progressRatio * peaks.length);
 
-    const btnBg = isOwn ? "rgba(255, 255, 255, 0.2)" : t.accent;
+    const btnBg = isOwn ? "rgba(255, 255, 255, 0.2)" : t.buttonBg;
     const barActiveColor = isOwn ? "#ffffff" : t.accent;
     const barInactiveColor = isOwn ? "rgba(255, 255, 255, 0.35)" : (t.isDark ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)");
     const textColor = isOwn ? "#ffffff" : t.text;

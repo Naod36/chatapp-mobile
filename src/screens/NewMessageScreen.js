@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
     View, Text, TextInput, FlatList, TouchableOpacity,
-    StyleSheet, ActivityIndicator,
+    StyleSheet, ActivityIndicator, Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
@@ -9,6 +9,7 @@ import { useApp } from "../context/AppContext";
 import Avatar from "../components/common/Avatar";
 import { apiFetch } from "../services/api";
 import { conversationService } from "../services/conversations";
+import { redactUser } from "../utils/blockPolicy";
 
 function BackIcon({ color }) {
     return (
@@ -26,7 +27,7 @@ function SearchIcon({ color }) {
 }
 
 export default function NewMessageScreen({ navigation }) {
-    const { theme: t, setConversations } = useApp();
+    const { theme: t, setConversations, isBlockedBy, getBlockPolicy, blockStateReady, blockStateVersion } = useApp();
     const insets = useSafeAreaInsets();
     const [query, setQuery] = useState("");
     const [results, setResults] = useState([]);
@@ -47,24 +48,26 @@ export default function NewMessageScreen({ navigation }) {
             }
         }, 350);
         return () => clearTimeout(timer);
-    }, [query]);
+    }, [query, blockStateVersion]);
 
     const handleStart = useCallback(async (targetUser) => {
         const uid = targetUser.user_id || targetUser.id;
         setStarting(uid);
         try {
-            const conv = await conversationService.createConversation(uid);
+            if (!blockStateReady || getBlockPolicy(uid).preventDirectInteraction) throw new Error("Direct messaging is unavailable for this conversation.");
+            const result = await conversationService.createConversation(uid);
+            const conv = { ...result, id: result.id || result.conversation_id, type: "direct", other_participant: targetUser };
             setConversations(prev => {
                 if (prev.some(c => String(c.id) === String(conv.id))) return prev;
                 return [conv, ...prev];
             });
             navigation.replace("Chat", { conversation: conv });
         } catch (err) {
-            console.error("Start DM error:", err.message);
+            Alert.alert("Unavailable", err.message);
         } finally {
             setStarting(null);
         }
-    }, [navigation, setConversations]);
+    }, [navigation, setConversations, getBlockPolicy, blockStateReady]);
 
     return (
         <View style={[styles.container, { backgroundColor: t.bg, paddingTop: insets.top }]}>
@@ -100,7 +103,7 @@ export default function NewMessageScreen({ navigation }) {
                 <ActivityIndicator style={{ marginTop: 40 }} size="large" color={t.accent} />
             ) : (
                 <FlatList
-                    data={results}
+                    data={results.map((person) => redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity)))}
                     keyExtractor={item => String(item.user_id || item.id)}
                     renderItem={({ item }) => {
                         const uid = item.user_id || item.id;

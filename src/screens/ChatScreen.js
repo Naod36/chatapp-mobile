@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
+  Image,
   FlatList,
   StyleSheet,
   Text,
@@ -28,6 +29,7 @@ import PinChoiceModal from "../components/chat/PinChoiceModal";
 import PinnedListModal from "../components/chat/PinnedListModal";
 import TypingIndicator from "../components/chat/TypingIndicator";
 import ContextMenu from "../components/chat/ContextMenu";
+import { redactMessage } from "../utils/blockPolicy";
 
 function EmptyChatIcon({ color }) {
   return (
@@ -47,13 +49,16 @@ export default function ChatScreen({ route, navigation }) {
   const {
     theme: t,
     user,
-    typingMap,
     isBlocked,
     isBlockedBy,
     blockUser,
     unblockUser,
+    conversations,
+    blockStateReady,
+    blockStateVersion,
   } = useApp();
-  const { conversation } = route.params;
+  const conversation = conversations.find((item) => String(item.id || item.conversation_id) ===
+    String(route.params.conversation.id || route.params.conversation.conversation_id)) || route.params.conversation;
   const convId = String(conversation.id || conversation.conversation_id);
   const currentUserId = String(user?.userId || user?.user_id || "");
   const isGroup = conversation.type === "group";
@@ -69,10 +74,9 @@ export default function ChatScreen({ route, navigation }) {
   const otherUser = conversation?.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const canBlock = !isGroup && !!otherUserId;
-  // isUserBlocked: I blocked them (I still see their real name/photo, just can't message them).
-  // isBlockedByThem: they blocked me (my identity gets masked from their side, not mine).
   const isUserBlocked = canBlock && isBlocked(otherUserId);
-  const isBlockedByThem = canBlock && isBlockedBy(otherUserId);
+  const isBlockedByThem = canBlock && (!blockStateReady || isBlockedBy(otherUserId));
+  const directDisabled = !isGroup && (!blockStateReady || isUserBlocked || isBlockedByThem);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [isChatPinned, setIsChatPinned] = useState(false);
@@ -82,7 +86,7 @@ export default function ChatScreen({ route, navigation }) {
     try {
       if (isUserBlocked) {
         await unblockUser(otherUserId);
-        Alert.alert("Unblocked", "You can now message this user again.");
+        Alert.alert("Unblocked", "Your block has been removed.");
       } else {
         await blockUser(otherUserId);
         Alert.alert("Blocked", "This user can no longer message you.");
@@ -97,10 +101,12 @@ export default function ChatScreen({ route, navigation }) {
   }, []);
 
   useEffect(() => {
-    AsyncStorage.getItem("@flowchat_pinned_conversations").then((raw) => {
-      const ids = raw ? JSON.parse(raw) : [];
-      setIsChatPinned(ids.includes(convId));
-    }).catch(() => {});
+    AsyncStorage.getItem("@flowchat_pinned_conversations")
+      .then((raw) => {
+        const ids = raw ? JSON.parse(raw) : [];
+        setIsChatPinned(ids.includes(convId));
+      })
+      .catch(() => {});
   }, [convId]);
 
   const handleToggleChatPin = useCallback(async () => {
@@ -109,7 +115,10 @@ export default function ChatScreen({ route, navigation }) {
     const next = isChatPinned
       ? ids.filter((id) => id !== convId)
       : [...ids.filter((id) => id !== convId), convId];
-    await AsyncStorage.setItem("@flowchat_pinned_conversations", JSON.stringify(next));
+    await AsyncStorage.setItem(
+      "@flowchat_pinned_conversations",
+      JSON.stringify(next),
+    );
     setIsChatPinned(!isChatPinned);
   }, [convId, isChatPinned]);
 
@@ -126,7 +135,9 @@ export default function ChatScreen({ route, navigation }) {
     toggleReaction,
     handleTypingStart,
     handleTypingStop,
-  } = useMessages(convId, conversation.pinned_message_id);
+    assertInteractionAllowed,
+    suppressReceipts,
+  } = useMessages(convId, conversation.pinned_message_id, conversation);
 
   const [inputText, setInputText] = useState("");
   const [replyingTo, setReplyingTo] = useState(null);
@@ -145,10 +156,34 @@ export default function ChatScreen({ route, navigation }) {
   const [messageSearchIndex, setMessageSearchIndex] = useState(0);
 
   const flatListRef = useRef(null);
+  const sendControllerRef = useRef(null);
+  const canInteract = useCallback(() => {
+    try {
+      assertInteractionAllowed();
+      return true;
+    } catch (error) {
+      Alert.alert("Unavailable", error.message);
+      return false;
+    }
+  }, [assertInteractionAllowed]);
+  const showMutationError = (error) => Alert.alert("Action failed", error.message);
+
+  useEffect(() => {
+    if (!directDisabled) return;
+    sendControllerRef.current?.abort();
+    setAttachment(null);
+    setReplyingTo(null);
+    setEditingMessage(null);
+    setPinChoiceVisible(false);
+  }, [directDisabled, blockStateVersion]);
+
+  useEffect(() => () => sendControllerRef.current?.abort(), [convId]);
 
   const searchMatches = messageSearchQuery.trim()
     ? messages.filter((message) =>
-        String(message.content || "").toLowerCase().includes(messageSearchQuery.trim().toLowerCase()),
+        String(message.content || "")
+          .toLowerCase()
+          .includes(messageSearchQuery.trim().toLowerCase()),
       )
     : [];
 
@@ -156,20 +191,33 @@ export default function ChatScreen({ route, navigation }) {
     if (!searchMatches.length) return;
     const match = searchMatches[messageSearchIndex % searchMatches.length];
     const matchIndex = messages.findIndex(
-      (message) => String(message.id || message.message_id) === String(match.id || match.message_id),
+      (message) =>
+        String(message.id || message.message_id) ===
+        String(match.id || match.message_id),
     );
     if (matchIndex >= 0) {
-      flatListRef.current?.scrollToIndex({ index: matchIndex, animated: true, viewPosition: 0.5 });
+      flatListRef.current?.scrollToIndex({
+        index: matchIndex,
+        animated: true,
+        viewPosition: 0.5,
+      });
     }
   }, [messageSearchIndex, messageSearchQuery, messages]);
 
-  const cycleSearch = useCallback((direction) => {
-    if (!searchMatches.length) return;
-    setMessageSearchIndex((index) => (index + direction + searchMatches.length) % searchMatches.length);
-  }, [searchMatches.length]);
+  const cycleSearch = useCallback(
+    (direction) => {
+      if (!searchMatches.length) return;
+      setMessageSearchIndex(
+        (index) =>
+          (index + direction + searchMatches.length) % searchMatches.length,
+      );
+    },
+    [searchMatches.length],
+  );
 
   const handleToggleReaction = useCallback(
     (msg, emoji) => {
+      if (!canInteract()) return;
       const msgId = String(msg.id || msg.message_id);
       toggleReaction(msgId, emoji);
     },
@@ -217,11 +265,13 @@ export default function ChatScreen({ route, navigation }) {
   }, []);
 
   const handleReply = useCallback(() => {
+    if (!canInteract()) return;
     setReplyingTo(selectedMsg);
     closeContextMenu();
   }, [selectedMsg, closeContextMenu]);
 
   const handleEdit = useCallback(() => {
+    if (!canInteract()) return;
     if (selectedMsg && selectedMsg.content) {
       setEditingMessage(selectedMsg);
       setInputText(selectedMsg.content);
@@ -237,6 +287,7 @@ export default function ChatScreen({ route, navigation }) {
   }, [selectedMsg, closeContextMenu]);
 
   const handlePinRequest = useCallback(() => {
+    if (!canInteract()) return;
     if (!selectedMsg) return;
     const msgId = String(selectedMsg.id || selectedMsg.message_id);
     const isCurrentlyPinned = pinnedMessages.some(
@@ -244,7 +295,7 @@ export default function ChatScreen({ route, navigation }) {
     );
 
     if (isCurrentlyPinned) {
-      unpinMessage(msgId);
+      unpinMessage(msgId).catch(showMutationError);
       closeContextMenu();
     } else {
       // Open PinChoiceModal
@@ -255,9 +306,10 @@ export default function ChatScreen({ route, navigation }) {
 
   const handleConfirmPin = useCallback(
     (scope, notify = true) => {
+      if (!canInteract()) return;
       if (!selectedMsg) return;
       const msgId = String(selectedMsg.id || selectedMsg.message_id);
-      pinMessage(msgId, scope, notify);
+      pinMessage(msgId, scope, notify).catch(showMutationError);
       setPinChoiceVisible(false);
       setSelectedMsg(null);
     },
@@ -265,6 +317,7 @@ export default function ChatScreen({ route, navigation }) {
   );
 
   const handleDelete = useCallback(async () => {
+    if (!canInteract()) return;
     if (!selectedMsg) return;
     const msgId = String(selectedMsg.id || selectedMsg.message_id);
     const isOwn = String(selectedMsg.sender_id) === currentUserId;
@@ -283,6 +336,11 @@ export default function ChatScreen({ route, navigation }) {
 
   // ─── Send ─────────────────────────────────────────────────────────────────
   const handleSend = useCallback(async () => {
+    if (sendControllerRef.current || !canInteract()) return;
+    const controller = new AbortController();
+    sendControllerRef.current = controller;
+    setIsUploading(true);
+    try {
     const text = inputText.trim();
 
     if (editingMessage) {
@@ -320,7 +378,7 @@ export default function ChatScreen({ route, navigation }) {
           attachment.uri?.startsWith("blob:") ||
           attachment.uri?.startsWith("data:")
         ) {
-          const response = await fetch(attachment.uri);
+          const response = await fetch(attachment.uri, { signal: controller.signal });
           const blob = await response.blob();
           const fileObj = new File([blob], attachment.name || "upload", {
             type: attachment.type || blob.type || "application/octet-stream",
@@ -334,13 +392,17 @@ export default function ChatScreen({ route, navigation }) {
           });
         }
 
+        assertInteractionAllowed();
+        if (controller.signal.aborted) throw new Error("Send cancelled.");
         const res = await conversationService.uploadFile(
           formData,
           (progress) => {
             setUploadProgress(progress);
           },
+          controller.signal,
         );
         mediaUrl = res?.url || res?.file_url || res?.media_url;
+        if (!mediaUrl) throw new Error("Upload did not return a file URL.");
         fileName = attachment.name;
         msgType = attachment.mediaType;
       } catch (err) {
@@ -353,10 +415,19 @@ export default function ChatScreen({ route, navigation }) {
       setUploadProgress(null);
     }
 
-    await sendMessage(text, replyId, msgType, mediaUrl, fileName);
+    assertInteractionAllowed();
+    if (controller.signal.aborted) throw new Error("Send cancelled.");
+    await sendMessage(text, replyId, msgType, mediaUrl, fileName, controller.signal);
     setInputText("");
     setAttachment(null);
     setReplyingTo(null);
+    } catch (error) {
+      Alert.alert("Message not sent", error.message || "The server rejected this message.");
+    } finally {
+      sendControllerRef.current = null;
+      setIsUploading(false);
+      setUploadProgress(null);
+    }
   }, [
     inputText,
     attachment,
@@ -381,7 +452,8 @@ export default function ChatScreen({ route, navigation }) {
   }, [messages]);
 
   // ─── Render ───────────────────────────────────────────────────────────────
-  const isTypingActive = typingUser || (typingMap?.[convId] ? true : null);
+  const isTypingActive = !directDisabled && blockStateReady ? typingUser : null;
+  const messagesById = new Map(messages.map((message) => [String(message.id || message.message_id), message]));
   const selectedMsgIsPinned = selectedMsg
     ? pinnedMessages.some(
         (p) =>
@@ -395,30 +467,60 @@ export default function ChatScreen({ route, navigation }) {
       style={[styles.container, { backgroundColor: t.chatPaneBg || t.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <Image
+        source={require("../../assets/chat-wallpaper.png")}
+        resizeMode="repeat"
+        pointerEvents="none"
+        accessible={false}
+        style={[StyleSheet.absoluteFill, { opacity: t.isDark ? 0.14 : 0.2 }]}
+      />
       <ChatHeader
+        onSearchPress={() => setMessageSearchOpen((open) => !open)}
         conversation={conversation}
-        typingUser={typingUser}
+        typingUser={isTypingActive}
+        disableTyping={directDisabled || !blockStateReady}
         onBack={() => navigation.goBack()}
         onMorePress={canBlock ? handleMorePress : undefined}
         isBlocked={isBlockedByThem}
       />
 
       {messageSearchOpen && (
-        <View style={[styles.messageSearchBar, { backgroundColor: t.cardBg, borderColor: t.borderColor }]}> 
+        <View
+          style={[
+            styles.messageSearchBar,
+            { backgroundColor: t.cardBg, borderColor: t.borderColor },
+          ]}
+        >
           <TextInput
             autoFocus
             value={messageSearchQuery}
-            onChangeText={(value) => { setMessageSearchQuery(value); setMessageSearchIndex(0); }}
+            onChangeText={(value) => {
+              setMessageSearchQuery(value);
+              setMessageSearchIndex(0);
+            }}
             placeholder="Search messages..."
             placeholderTextColor={t.textMuted}
             style={[styles.messageSearchInput, { color: t.text }]}
           />
           <Text style={{ color: t.textMuted, fontSize: 12 }}>
-            {searchMatches.length ? `${messageSearchIndex + 1}/${searchMatches.length}` : "0 results"}
+            {searchMatches.length
+              ? `${messageSearchIndex + 1}/${searchMatches.length}`
+              : "0 results"}
           </Text>
-          <TouchableOpacity onPress={() => cycleSearch(-1)}><Text style={{ color: t.accent, fontSize: 18 }}>‹</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => cycleSearch(1)}><Text style={{ color: t.accent, fontSize: 18 }}>›</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => { setMessageSearchOpen(false); setMessageSearchQuery(""); }}><Text style={{ color: t.textMuted, fontSize: 16 }}>×</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => cycleSearch(-1)}>
+            <Text style={{ color: t.accent, fontSize: 18 }}>‹</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => cycleSearch(1)}>
+            <Text style={{ color: t.accent, fontSize: 18 }}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setMessageSearchOpen(false);
+              setMessageSearchQuery("");
+            }}
+          >
+            <Text style={{ color: t.textMuted, fontSize: 16 }}>×</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -428,8 +530,8 @@ export default function ChatScreen({ route, navigation }) {
         theme={t}
         onCycle={handleCyclePinned}
         onOpenList={() => setPinnedListVisible(true)}
-        onUnpinActive={(msg) =>
-          unpinMessage(msg.message_id || msg.id, msg.scope)
+        onUnpinActive={directDisabled ? undefined : (msg) =>
+          unpinMessage(msg.message_id || msg.id, msg.scope).catch(showMutationError)
         }
       />
 
@@ -445,6 +547,8 @@ export default function ChatScreen({ route, navigation }) {
           return (
             <MessageBubble
               msg={item}
+              repliedMessage={messagesById.get(String(item.reply_to_id))}
+              onReplyPress={scrollToMessageId}
               isOwn={isOwn}
               isGroup={isGroup}
               theme={t}
@@ -454,6 +558,8 @@ export default function ChatScreen({ route, navigation }) {
               userProfile={user}
               onToggleReaction={handleToggleReaction}
               onLongPress={openContextMenu}
+              suppressReceipts={suppressReceipts}
+              interactionsDisabled={directDisabled}
             />
           );
         }}
@@ -491,7 +597,7 @@ export default function ChatScreen({ route, navigation }) {
         onTypingStart={handleTypingStart}
         onTypingStop={handleTypingStop}
         theme={t}
-        replyingTo={replyingTo}
+        replyingTo={redactMessage(replyingTo, isBlockedBy)}
         onCancelReply={() => setReplyingTo(null)}
         editingMessage={editingMessage}
         onCancelEdit={() => {
@@ -503,11 +609,13 @@ export default function ChatScreen({ route, navigation }) {
         onClearAttachment={() => setAttachment(null)}
         isUploading={isUploading}
         uploadProgress={uploadProgress}
-        disabled={isUserBlocked || isBlockedByThem}
+        disabled={directDisabled}
+        assertInteractionAllowed={assertInteractionAllowed}
       />
 
       <ContextMenu
         visible={contextMenuVisible}
+        interactionsDisabled={directDisabled}
         message={selectedMsg}
         isOwn={
           selectedMsg ? String(selectedMsg.sender_id) === currentUserId : false
@@ -537,8 +645,8 @@ export default function ChatScreen({ route, navigation }) {
         pinnedMessages={pinnedMessages}
         theme={t}
         onSelectMessage={(msg) => scrollToMessageId(msg.message_id || msg.id)}
-        onUnpinMessage={(msg) =>
-          unpinMessage(msg.message_id || msg.id, msg.scope)
+        onUnpinMessage={directDisabled ? undefined : (msg) =>
+          unpinMessage(msg.message_id || msg.id, msg.scope).catch(showMutationError)
         }
         onClose={() => setPinnedListVisible(false)}
       />
@@ -550,7 +658,6 @@ export default function ChatScreen({ route, navigation }) {
         isBlocked={isUserBlocked}
         isPinned={isChatPinned}
         onTogglePin={handleToggleChatPin}
-        onSearch={() => setMessageSearchOpen(true)}
         onToggleBlock={() => setShowBlockConfirm(true)}
       />
 

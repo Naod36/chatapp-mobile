@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
+import Svg, { Circle, Path } from "react-native-svg";
 import Avatar from "../common/Avatar";
 import { useApp } from "../../context/AppContext";
 
@@ -20,14 +21,13 @@ export default function ChatHeader({
   typingUser,
   onBack,
   onMorePress,
+  onSearchPress,
   isBlocked = false,
+  disableTyping = false,
 }) {
   const insets = useSafeAreaInsets();
-  const { theme: t, getPresence, typingMap, updateBannerVisible } = useApp();
+  const { theme: t, getPresence, updateBannerVisible } = useApp();
 
-  const convIdStr = String(
-    conversation?.id || conversation?.conversation_id || "",
-  );
   const isGroup = conversation?.type === "group";
   const isSaved =
     !conversation?.other_participant && conversation?.type === "direct";
@@ -57,7 +57,7 @@ export default function ChatHeader({
       otherUser?.status === "online" ||
       conversation?.status === "online");
 
-  const isTyping = !isBlocked && Boolean(typingUser || typingMap?.[convIdStr]);
+  const isTyping = !isBlocked && !disableTyping && Boolean(typingUser);
 
   let subtitle = "";
   if (isBlocked) {
@@ -115,7 +115,7 @@ export default function ChatHeader({
             style={[
               styles.subtitleText,
               {
-                color: typingUser || isOnline ? "#22c55e" : t.textMuted,
+                color: typingUser || isOnline ? t.success : t.textMuted,
               },
             ]}
             numberOfLines={1}
@@ -125,6 +125,20 @@ export default function ChatHeader({
         ) : null}
       </View>
 
+      {onSearchPress && (
+        <TouchableOpacity
+          onPress={onSearchPress}
+          accessibilityRole="button"
+          accessibilityLabel="Search messages"
+          style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          {...(Platform.OS === "web" ? { title: "Search messages" } : {})}
+        >
+          <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <Circle cx="10.5" cy="10.5" r="6.5" stroke={t.textMuted} strokeWidth="2" />
+            <Path d="M16 16l5 5" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" />
+          </Svg>
+        </TouchableOpacity>
+      )}
       {onMorePress && (
         <TouchableOpacity
           onPress={onMorePress}

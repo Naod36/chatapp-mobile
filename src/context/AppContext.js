@@ -7,6 +7,9 @@ import React, {
   useCallback,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
+import { blockPolicy } from "../utils/blockPolicy";
+import { createBlockRefresh } from "../utils/blockRefresh";
 import { authService } from "../services/auth";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
@@ -31,6 +34,12 @@ export function AppProvider({ children }) {
   const [updateBannerVisible, setUpdateBannerVisible] = useState(false);
   const [blockedUserIds, setBlockedUserIds] = useState([]);
   const [blockedByUserIds, setBlockedByUserIds] = useState([]);
+  const [blockStateVersion, setBlockStateVersion] = useState(0);
+  const [blockStateReady, setBlockStateReady] = useState(false);
+  const relationsRef = useRef({ outgoing: [], incoming: [], ready: false });
+  const blockRefreshRef = useRef(null);
+  const conversationGenerationRef = useRef(0);
+  const authTokenRef = useRef(null);
 
   const t = THEMES[themeKey] || THEMES.light;
 
@@ -39,13 +48,19 @@ export function AppProvider({ children }) {
     authService
       .getCurrentUser()
       .then((u) => {
-        if (u) setUser(u);
+        if (u) {
+          conversationGenerationRef.current += 1;
+          authTokenRef.current = u.token;
+          setUser(u);
+        }
       })
       .catch(() => {})
       .finally(() => setAuthLoading(false));
   }, []);
 
   const login = useCallback((userData) => {
+    conversationGenerationRef.current += 1;
+    authTokenRef.current = userData.token;
     setUser({
       userId: userData.userId || userData.user_id,
       user_id: userData.userId || userData.user_id,
@@ -55,6 +70,12 @@ export function AppProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    conversationGenerationRef.current += 1;
+    authTokenRef.current = null;
+    blockRefreshRef.current?.stop();
+    blockRefreshRef.current = null;
+    relationsRef.current = { outgoing: [], incoming: [], ready: false };
+    setBlockStateReady(false);
     try {
       websocketService.closeAll();
     } catch (e) {}
@@ -73,15 +94,16 @@ export function AppProvider({ children }) {
   useEffect(() => {
     AsyncStorage.getItem(THEME_KEY)
       .then((saved) => {
-        if (saved && THEMES[saved]) setThemeKey(saved);
+        if (saved && THEMES[saved]) setThemeKey(THEMES[saved].isDark ? "dark" : "light");
       })
       .catch(() => {});
   }, []);
 
   const changeTheme = useCallback(async (newKey) => {
     if (!THEMES[newKey]) return;
-    setThemeKey(newKey);
-    await AsyncStorage.setItem(THEME_KEY, newKey).catch(() => {});
+    const nextKey = THEMES[newKey].isDark ? "dark" : "light";
+    setThemeKey(nextKey);
+    await AsyncStorage.setItem(THEME_KEY, nextKey).catch(() => {});
   }, []);
 
   const typingTimersRef = useRef({});
@@ -89,10 +111,13 @@ export function AppProvider({ children }) {
   // ─── Conversations ───────────────────────────────────────────────────────
   const loadConversations = useCallback(
     async (showUpdating = true) => {
-      if (!user?.token) return;
+      if (!user?.token || user.token !== authTokenRef.current) return;
+      const generation = ++conversationGenerationRef.current;
+      const isCurrent = () => generation === conversationGenerationRef.current && user.token === authTokenRef.current;
       if (showUpdating) setSyncState("updating");
       try {
         const data = await conversationService.listConversations();
+        if (!isCurrent()) return;
         const normalized = (data || []).map((c) => ({
           ...c,
           id: c.id || c.conversation_id,
@@ -100,6 +125,7 @@ export function AppProvider({ children }) {
         }));
         setConversations(normalized);
       } catch (err) {
+        if (!isCurrent()) return;
         console.warn("loadConversations notice:", err.message);
         if (
           err.message?.includes("session has expired") ||
@@ -109,11 +135,15 @@ export function AppProvider({ children }) {
           logout();
         }
       } finally {
-        setSyncState("ready");
+        if (isCurrent()) setSyncState("ready");
       }
     },
     [user?.token],
   );
+
+  useEffect(() => () => {
+    conversationGenerationRef.current += 1;
+  }, []);
 
   useEffect(() => {
     if (user?.token) {
@@ -137,20 +167,65 @@ export function AppProvider({ children }) {
   }, [user?.token]);
 
   // ─── Blocked users ────────────────────────────────────────────────────────
-  const refreshBlockedUsers = useCallback(async () => {
-    if (!user?.token) return;
-    try {
-      const list = await userService.getBlockedUsers();
-      setBlockedUserIds((list || []).map((u) => String(u.user_id)));
-    } catch (e) {
-      // Non-fatal — masking/blocking is best-effort on top of server enforcement.
+  const applyRelations = useCallback((outgoing, incoming) => {
+    outgoing = [...new Set(outgoing.map(String))].sort();
+    incoming = [...new Set(incoming.map(String))].sort();
+    const previous = relationsRef.current;
+    const changed = !previous.ready ||
+      JSON.stringify([outgoing, incoming]) !== JSON.stringify([previous.outgoing, previous.incoming]);
+    relationsRef.current = { outgoing, incoming, ready: true };
+    setBlockedUserIds(outgoing);
+    setBlockedByUserIds(incoming);
+    setBlockStateReady(true);
+    if (changed) {
+      conversationGenerationRef.current += 1;
+      setPresenceMap({});
+      setTypingMap({});
+      setBlockStateVersion((version) => version + 1);
+      loadConversationsRef.current(false);
     }
-  }, [user?.token]);
+  }, []);
+
+  const refreshBlockState = useCallback(() => blockRefreshRef.current?.refresh(), []);
+  const refreshBlockedUsers = refreshBlockState;
+  const refreshBlockedByUsers = refreshBlockState;
 
   useEffect(() => {
-    if (user?.token) refreshBlockedUsers();
-    else setBlockedUserIds([]);
-  }, [user?.token]); // eslint-disable-line
+    relationsRef.current = { outgoing: [], incoming: [], ready: false };
+    setBlockedUserIds([]);
+    setBlockedByUserIds([]);
+    setBlockStateReady(false);
+    if (!user?.token) return;
+    const refresh = createBlockRefresh(
+      async (signal) => Promise.all([
+        userService.getBlockedUsers(signal),
+        userService.getBlockedByUsers(signal),
+      ]),
+      ([outgoing, incoming]) => applyRelations(
+        (outgoing || []).map((person) => person.user_id || person.id), incoming || [],
+      ),
+      (error) => console.warn("Block state refresh:", error.message),
+    );
+    blockRefreshRef.current = refresh;
+    refresh.refresh();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refresh.refresh();
+    });
+    const timer = setInterval(() => {
+      if (!AppState.currentState || AppState.currentState === "active") refresh.refresh();
+    }, 12000);
+    return () => {
+      refresh.stop();
+      if (blockRefreshRef.current === refresh) blockRefreshRef.current = null;
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [user?.token, applyRelations]);
+
+  const getBlockPolicy = useCallback((userId, isGroup = false) => {
+    const relation = relationsRef.current;
+    return blockPolicy(userId, relation.outgoing, relation.incoming, isGroup);
+  }, []);
 
   const isBlocked = useCallback(
     (userId) => blockedUserIds.includes(String(userId || "")),
@@ -158,34 +233,22 @@ export function AppProvider({ children }) {
   );
 
   const blockUser = useCallback(async (userId) => {
+    const owner = blockRefreshRef.current;
     await userService.blockUser(userId);
-    setBlockedUserIds((prev) =>
-      prev.includes(String(userId)) ? prev : [...prev, String(userId)],
-    );
-  }, []);
+    if (owner !== blockRefreshRef.current) return;
+    const { outgoing, incoming } = relationsRef.current;
+    applyRelations([...outgoing, String(userId)], incoming);
+    await refreshBlockState();
+  }, [applyRelations, refreshBlockState]);
 
   const unblockUser = useCallback(async (userId) => {
+    const owner = blockRefreshRef.current;
     await userService.unblockUser(userId);
-    setBlockedUserIds((prev) => prev.filter((id) => id !== String(userId)));
-  }, []);
-
-  // ─── Blocked-by (users who have blocked ME) ──────────────────────────────
-  // Used to mask MY identity from someone who blocked me, while I (the
-  // blocker) still see the person I blocked normally.
-  const refreshBlockedByUsers = useCallback(async () => {
-    if (!user?.token) return;
-    try {
-      const ids = await userService.getBlockedByUsers();
-      setBlockedByUserIds((ids || []).map(String));
-    } catch (e) {
-      // Non-fatal
-    }
-  }, [user?.token]);
-
-  useEffect(() => {
-    if (user?.token) refreshBlockedByUsers();
-    else setBlockedByUserIds([]);
-  }, [user?.token]); // eslint-disable-line
+    if (owner !== blockRefreshRef.current) return;
+    const { outgoing, incoming } = relationsRef.current;
+    applyRelations(outgoing.filter((id) => id !== String(userId)), incoming);
+    await refreshBlockState();
+  }, [applyRelations, refreshBlockState]);
 
   const isBlockedBy = useCallback(
     (userId) => blockedByUserIds.includes(String(userId || "")),
@@ -198,7 +261,7 @@ export function AppProvider({ children }) {
     websocketService.connect(
       user.token,
       null, // handlers registered separately below via subscribe
-      () => loadConversations(true), // reconnected: show "updating" while re-syncing, then "ready"
+      () => { refreshBlockState(); loadConversationsRef.current(true); },
       () => setSyncState("connecting"),
       (err) => console.warn("WS Error:", err),
     );
@@ -224,6 +287,10 @@ export function AppProvider({ children }) {
         userRef.current?.userId || userRef.current?.user_id || "",
       );
       const event = data.event || data.type || data.action;
+      if (event === "block_state_changed") {
+        refreshBlockState();
+        return;
+      }
 
       // ── New message ──────────────────────────────────────────────────
       if (event === "new_message") {
@@ -272,7 +339,7 @@ export function AppProvider({ children }) {
       } else if (event === "user_status") {
         const uid = String(data.user_id || data.userId || "");
         const status = data.status;
-        if (!uid || !status) return;
+        if (!uid || !status || getBlockPolicy(uid).hideIdentity) return;
         setPresenceMap((prev) => ({ ...prev, [uid]: status }));
         setConversations((prev) =>
           prev.map((c) => {
@@ -297,6 +364,7 @@ export function AppProvider({ children }) {
         const convIdStr = String(rawConvId);
         const senderId = String(data.user_id || data.sender_id || "");
         if (senderId && senderId === currentUserId) return;
+        if (!senderId || getBlockPolicy(senderId).hideIdentity) return;
         const isTyping = data.is_typing ?? data.typing ?? false;
 
         setTypingMap((prev) => ({ ...prev, [convIdStr]: isTyping }));
@@ -336,10 +404,10 @@ export function AppProvider({ children }) {
 
   const getPresence = useCallback(
     (userId) => {
-      if (!userId) return "offline";
+      if (!userId || !blockStateReady || isBlockedBy(userId)) return "offline";
       return presenceMap[String(userId)] || "offline";
     },
-    [presenceMap],
+    [presenceMap, blockStateReady, isBlockedBy],
   );
 
   const value = {
@@ -368,6 +436,10 @@ export function AppProvider({ children }) {
     blockedByUserIds,
     isBlockedBy,
     refreshBlockedByUsers,
+    refreshBlockState,
+    blockStateVersion,
+    blockStateReady,
+    getBlockPolicy,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

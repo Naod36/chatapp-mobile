@@ -4,6 +4,8 @@ import Svg, { Path } from "react-native-svg";
 import MessageStatusIcon from "../common/MessageStatusIcon";
 import VoicePlayer from "./VoicePlayer";
 import { API_BASE } from "../../services/api";
+import { useApp } from "../../context/AppContext";
+import { redactMessage } from "../../utils/blockPolicy";
 
 function FileIcon({ color }) {
   return (
@@ -71,13 +73,13 @@ function formatTime(ts) {
 }
 
 const SENDER_COLORS = [
-  "#0284c7",
-  "#818cf8",
-  "#f43f5e",
-  "#d97706",
-  "#059669",
-  "#7c3aed",
-  "#db2777",
+  "#39647b",
+  "#56617d",
+  "#875367",
+  "#795e3f",
+  "#326d60",
+  "#725773",
+  "#8a4d49",
 ];
 function senderColor(id) {
   if (!id) return SENDER_COLORS[0];
@@ -97,7 +99,14 @@ function MessageBubble({
   userProfile,
   onToggleReaction,
   onLongPress,
+  repliedMessage,
+  onReplyPress,
+  suppressReceipts = false,
+  interactionsDisabled = false,
 }) {
+  const { isBlockedBy, blockStateReady } = useApp();
+  const hiddenSender = !blockStateReady || isBlockedBy(msg.sender_id || msg.user_id);
+  msg = redactMessage(msg, (identity) => !blockStateReady || isBlockedBy(identity));
   const isImage = msg.message_type === "image";
   const isVoice = msg.message_type === "voice" || msg.message_type === "audio";
   const isFile = msg.message_type === "file";
@@ -105,6 +114,17 @@ function MessageBubble({
 
   const bubbleBg = isOwn ? t.userBubbleBg : t.otherBubbleBg;
   const textColor = isOwn ? t.userBubbleText : t.otherBubbleText;
+  const original = msg.reply_to || repliedMessage;
+  const replySenderId = String(original?.sender_id || original?.user_id || "");
+  const replyHidden = original && (!blockStateReady || isBlockedBy(replySenderId));
+  const replyParticipant = (participants || []).find((person) => String(person.user_id || person.id) === replySenderId)
+    || (String(otherParticipant?.user_id || otherParticipant?.id) === replySenderId ? otherParticipant : null);
+  const replyName = !original ? "Reply" : replyHidden ? "Person Not Available"
+    : replySenderId === String(currentUserId) ? "You"
+    : original.sender_name || replyParticipant?.display_name || replyParticipant?.username || "Reply";
+  const replyContent = !original ? "Original message unavailable"
+    : original.content || ({ image: "Photo", video: "Video", voice: "Voice message", audio: "Voice message", file: "File" }[original.message_type] || "Message");
+  const replyId = msg.reply_to_id || original?.id || original?.message_id;
 
   return (
     <TouchableOpacity
@@ -118,11 +138,11 @@ function MessageBubble({
         <View
           style={[
             styles.groupAvatar,
-            { backgroundColor: senderColor(msg.sender_id || msg.user_id) },
+            { backgroundColor: hiddenSender ? t.textMuted : senderColor(msg.sender_id || msg.user_id) },
           ]}
         >
           <Text style={styles.groupAvatarText}>
-            {(msg.sender_name || "?")[0].toUpperCase()}
+            {hiddenSender ? "?" : (msg.sender_name || "?")[0].toUpperCase()}
           </Text>
         </View>
       )}
@@ -151,7 +171,7 @@ function MessageBubble({
             <Text
               style={[
                 styles.senderName,
-                { color: senderColor(msg.sender_id || msg.user_id) },
+                { color: hiddenSender ? t.textMuted : t.accent },
               ]}
             >
               {msg.sender_name}
@@ -159,16 +179,16 @@ function MessageBubble({
           )}
 
           {/* Reply preview */}
-          {msg.reply_to && (
-            <View
+          {(msg.reply_to_id || original) && (
+            <TouchableOpacity
+              onPress={() => onReplyPress?.(replyId)}
+              disabled={!original || !onReplyPress}
+              accessibilityRole="button"
+              accessibilityLabel={`Reply to ${replyName}: ${replyContent}`}
               style={[
                 styles.replyPreview,
                 {
-                  borderLeftColor: isOwn
-                    ? t.isDark
-                      ? "#818cf8"
-                      : "#fff"
-                    : t.accent,
+                  borderLeftColor: isOwn ? textColor : t.accent,
                   backgroundColor: isOwn
                     ? "rgba(0,0,0,0.12)"
                     : "rgba(0,0,0,0.05)",
@@ -178,22 +198,22 @@ function MessageBubble({
               <Text
                 style={[
                   styles.replyName,
-                  { color: isOwn ? (t.isDark ? "#818cf8" : "#fff") : t.accent },
+                  { color: isOwn ? textColor : t.accent },
                 ]}
                 numberOfLines={1}
               >
-                {msg.reply_to.sender_name || "Reply"}
+                {replyName}
               </Text>
               <Text
                 style={[
                   styles.replyContent,
-                  { color: isOwn ? "rgba(255,255,255,0.8)" : t.textMuted },
+                  { color: isOwn ? textColor : t.textMuted },
                 ]}
                 numberOfLines={1}
               >
-                {msg.reply_to.content || "Media"}
+                {replyContent}
               </Text>
-            </View>
+            </TouchableOpacity>
           )}
 
           {/* Image */}
@@ -258,7 +278,8 @@ function MessageBubble({
                 Array.isArray(uids) && uids.includes(currentUserId);
 
               const reactUsers = uids.map((uid) => {
-                const normUid = String(uid);
+                const normUid = String(typeof uid === "object" ? uid.user_id || uid.id : uid);
+                if (!blockStateReady || isBlockedBy(normUid)) return { avatar: null, initial: "?" };
                 if (normUid === currentUserId) {
                   return {
                     avatar: userProfile?.avatar_url,
@@ -302,18 +323,13 @@ function MessageBubble({
               return (
                 <TouchableOpacity
                   key={emoji}
+                  disabled={interactionsDisabled}
                   onPress={() => onToggleReaction?.(msg, emoji)}
                   style={[
                     styles.reactionPill,
                     {
-                      backgroundColor: hasReacted
-                        ? t.isDark
-                          ? "rgba(63,224,197,0.18)"
-                          : "rgba(2,132,199,0.12)"
-                        : t.isDark
-                          ? "rgba(255,255,255,0.06)"
-                          : "rgba(0,0,0,0.04)",
-                      borderColor: hasReacted ? "#3FE0C5" : t.borderColor,
+                      backgroundColor: t.cardBg,
+                      borderColor: hasReacted ? t.accent : t.borderColor,
                     },
                   ]}
                   activeOpacity={0.7}
@@ -329,7 +345,8 @@ function MessageBubble({
                             zIndex: shownUsers.length - idx,
                             backgroundColor: u.avatar
                               ? "transparent"
-                              : "#4A3FE0",
+                              : t.buttonBg,
+                            borderColor: t.cardBg,
                           },
                         ]}
                       >
@@ -349,7 +366,7 @@ function MessageBubble({
                     <Text
                       style={[
                         styles.reactionCount,
-                        { color: hasReacted ? "#3FE0C5" : t.textMuted },
+                        { color: hasReacted ? t.accent : t.textMuted },
                       ]}
                     >
                       {uids.length}
@@ -367,11 +384,11 @@ function MessageBubble({
             {formatTime(msg.created_at || msg.timestamp)}{" "}
             {msg.is_edited ? "(edited)" : ""}
           </Text>
-          <MessageStatusIcon
+          {msg.status === "failed" ? <Text style={{ color: t.textMuted }}>Not sent</Text> : !suppressReceipts && <MessageStatusIcon
             status={msg.status}
             isOwn={isOwn}
             isDark={t.isDark}
-          />
+          />}
         </View>
       </View>
     </TouchableOpacity>

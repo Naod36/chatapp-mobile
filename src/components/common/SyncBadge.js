@@ -29,7 +29,8 @@ export default function SyncBadge({ syncState, theme: t }) {
 
   if (syncState === "ready") return null;
 
-  const label = syncState === "connecting" ? "Connecting..." : "Updating...";
+  const label = syncState === "refreshing" ? "Refreshing..."
+    : syncState === "connecting" ? "Connecting..." : "Updating...";
 
   return (
     <View style={styles.badge}>

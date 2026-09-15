@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { conversationService } from "../services/conversations";
 import { apiFetch } from "../services/api";
 import { useApp } from "../context/AppContext";
+import { redactUser } from "../utils/blockPolicy";
 
 /**
  * useConversations — provides conversations state management.
@@ -17,6 +18,10 @@ export function useConversations() {
     user,
     typingMap,
     presenceMap,
+    getBlockPolicy,
+    blockStateReady,
+    blockStateVersion,
+    isBlockedBy,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,12 +51,15 @@ export function useConversations() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, blockStateVersion]);
 
   // ─── Start a direct conversation ──────────────────────────────────────────
   const startConversation = useCallback(
     async (targetUser) => {
       try {
+        if (!blockStateReady || getBlockPolicy(targetUser.user_id || targetUser.id).preventDirectInteraction) {
+          throw new Error("Direct messaging is unavailable for this conversation.");
+        }
         const result = await conversationService.createConversation(
           targetUser.user_id || targetUser.id,
         );
@@ -80,7 +88,7 @@ export function useConversations() {
         throw err;
       }
     },
-    [setConversations],
+    [setConversations, getBlockPolicy, blockStateReady],
   );
 
   return {
@@ -89,7 +97,7 @@ export function useConversations() {
     loadConversations,
     searchQuery,
     setSearchQuery,
-    searchResults,
+    searchResults: searchResults.map((person) => redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity))),
     isSearching,
     startConversation,
     typingMap,

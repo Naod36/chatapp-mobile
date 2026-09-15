@@ -13,9 +13,10 @@ import {
   ActivityIndicator,
   Keyboard,
 } from "react-native";
-import Svg, { Path, Line } from "react-native-svg";
+import Svg, { Path, Line, Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
+import EmojiPicker from "rn-emoji-keyboard";
 
 function ImageIcon({ color, size = 20 }) {
   return (
@@ -81,6 +82,17 @@ function VideoIcon({ color, size = 20 }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  );
+}
+
+function SmileIcon({ color }) {
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
+      <Circle cx="9" cy="9" r="1" fill={color} />
+      <Circle cx="15" cy="9" r="1" fill={color} />
+      <Path d="M8 14a4 4 0 008 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
     </Svg>
   );
 }
@@ -191,6 +203,7 @@ export default function MessageInput({
   isUploading,
   uploadProgress,
   disabled = false,
+  assertInteractionAllowed,
 }) {
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -217,12 +230,67 @@ export default function MessageInput({
     : Math.max(insets.bottom, Platform.OS === "ios" ? 16 : 8);
   const inputRef = useRef(null);
   const [pickerVisible, setPickerVisible] = useState(false);
+  const [emojiPickerVisible, setEmojiPickerVisible] = useState(false);
+  const selectionRef = useRef({ start: value.length, end: value.length });
+  const [emojiSelection, setEmojiSelection] = useState(undefined);
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSecs, setRecordingSecs] = useState(0);
   const timerRef = useRef(null);
   const webMediaRecorderRef = useRef(null);
   const webAudioChunksRef = useRef([]);
+  const nativeRecordingRef = useRef(null);
+  const operationRef = useRef({ generation: 0, disabled, mounted: true });
+  const permissionRef = useRef(assertInteractionAllowed);
+  permissionRef.current = assertInteractionAllowed;
+  if (disabled && !operationRef.current.disabled) operationRef.current.generation += 1;
+  operationRef.current.disabled = disabled;
+
+  const operationAllowed = (generation = operationRef.current.generation) => {
+    if (!operationRef.current.mounted || operationRef.current.disabled || generation !== operationRef.current.generation) return false;
+    try {
+      permissionRef.current?.();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const disposeRecording = async () => {
+    const mediaRecorder = webMediaRecorderRef.current;
+    webMediaRecorderRef.current = null;
+    if (mediaRecorder) {
+      mediaRecorder.onstop = null;
+      mediaRecorder.ondataavailable = null;
+      if (mediaRecorder.state !== "inactive") mediaRecorder.stop();
+      mediaRecorder.stream?.getTracks().forEach((track) => track.stop());
+    }
+    webAudioChunksRef.current = [];
+    const nativeRecorder = nativeRecordingRef.current;
+    nativeRecordingRef.current = null;
+    if (nativeRecorder) {
+      const { Audio } = require("expo-av");
+      try { await nativeRecorder.stopAndUnloadAsync(); } catch {}
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    operationRef.current.mounted = true;
+    if (disabled) {
+      disposeRecording();
+      setIsRecording(false);
+      setRecording(null);
+      setRecordingSecs(0);
+      setPickerVisible(false);
+      setEmojiPickerVisible(false);
+    }
+    return () => {
+      operationRef.current.mounted = false;
+      operationRef.current.generation += 1;
+      disposeRecording();
+    };
+  }, [disabled]);
 
   const hasText = value.trim().length > 0;
   const canSend = (hasText || attachment || editingMessage) && !isUploading;
@@ -241,6 +309,8 @@ export default function MessageInput({
   }, [isRecording]);
 
   const startRecording = async () => {
+    if (!operationAllowed()) return;
+    const generation = ++operationRef.current.generation;
     try {
       if (Platform.OS === "web") {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -253,6 +323,10 @@ export default function MessageInput({
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
+        if (!operationAllowed(generation)) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
         webAudioChunksRef.current = [];
         const mediaRecorder = new MediaRecorder(stream);
         webMediaRecorderRef.current = mediaRecorder;
@@ -272,6 +346,7 @@ export default function MessageInput({
       // Native mobile logic
       const { Audio } = require("expo-av");
       const { status } = await Audio.requestPermissionsAsync();
+      if (!operationAllowed(generation)) return;
       if (status !== "granted") {
         Alert.alert(
           "Permission Needed",
@@ -284,10 +359,20 @@ export default function MessageInput({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
+      if (!operationAllowed(generation)) {
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        return;
+      }
 
       const { recording: newRec } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
+      if (!operationAllowed(generation)) {
+        await newRec.stopAndUnloadAsync().catch(() => {});
+        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        return;
+      }
+      nativeRecordingRef.current = newRec;
       setRecording(newRec);
       setIsRecording(true);
       setRecordingSecs(0);
@@ -297,6 +382,8 @@ export default function MessageInput({
   };
 
   const stopAndSendRecording = async () => {
+    if (!operationAllowed()) { await disposeRecording(); return; }
+    const generation = operationRef.current.generation;
     const secs = recordingSecs;
     if (Platform.OS === "web") {
       const mediaRecorder = webMediaRecorderRef.current;
@@ -304,6 +391,9 @@ export default function MessageInput({
       setIsRecording(false);
 
       mediaRecorder.onstop = () => {
+        mediaRecorder.stream?.getTracks().forEach((track) => track.stop());
+        webMediaRecorderRef.current = null;
+        if (!operationAllowed(generation)) return;
         const blob = new Blob(webAudioChunksRef.current, {
           type: "audio/webm",
         });
@@ -332,18 +422,20 @@ export default function MessageInput({
     }
 
     // Native mobile logic
-    if (!recording) return;
+    const nativeRecorder = nativeRecordingRef.current;
+    if (!nativeRecorder) return;
+    nativeRecordingRef.current = null;
     try {
       setIsRecording(false);
       const { Audio } = require("expo-av");
-      await recording.stopAndUnloadAsync();
+      await nativeRecorder.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
 
-      const uri = recording.getURI();
+      const uri = nativeRecorder.getURI();
       setRecording(null);
       setRecordingSecs(0);
 
-      if (uri) {
+      if (uri && operationAllowed(generation)) {
         onSelectAttachment?.({
           uri,
           name: `voice_${Date.now()}.m4a`,
@@ -358,28 +450,11 @@ export default function MessageInput({
   };
 
   const cancelRecording = async () => {
-    if (Platform.OS === "web") {
-      const mediaRecorder = webMediaRecorderRef.current;
-      if (mediaRecorder && mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-      }
-      setIsRecording(false);
-      setRecordingSecs(0);
-      return;
-    }
-
-    if (!recording) return;
-    try {
-      setIsRecording(false);
-      const { Audio } = require("expo-av");
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      setRecording(null);
-      setRecordingSecs(0);
-    } catch (err) {
-      setIsRecording(false);
-      setRecording(null);
-    }
+    operationRef.current.generation += 1;
+    await disposeRecording();
+    setIsRecording(false);
+    setRecording(null);
+    setRecordingSecs(0);
   };
 
   const formatRecTime = (s) => {
@@ -389,6 +464,7 @@ export default function MessageInput({
   };
 
   const handleChange = (text) => {
+    if (!operationAllowed()) return;
     onChangeText(text);
     if (text.length > 0) {
       onTypingStart?.();
@@ -398,16 +474,33 @@ export default function MessageInput({
   };
 
   const handleSend = () => {
-    if (!canSend) return;
+    if (!canSend || !operationAllowed()) return;
     onTypingStop?.();
     onSend();
   };
 
+  const handleEmojiSelected = ({ emoji }) => {
+    if (!operationAllowed()) return;
+    const start = Math.min(selectionRef.current.start, value.length);
+    const end = Math.min(selectionRef.current.end, value.length);
+    const nextValue = value.slice(0, start) + emoji + value.slice(end);
+    if (nextValue.length > 4000) return;
+    handleChange(nextValue);
+    const nextSelection = { start: start + emoji.length, end: start + emoji.length };
+    selectionRef.current = nextSelection;
+    setEmojiSelection(nextSelection);
+    setEmojiPickerVisible(false);
+    inputRef.current?.focus();
+  };
+
   const handlePickImage = async () => {
+    if (!operationAllowed()) return;
+    const generation = operationRef.current.generation;
     setPickerVisible(false);
     try {
       const { status } =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!operationAllowed(generation)) return;
       if (status !== "granted") {
         Alert.alert(
           "Permission Needed",
@@ -421,7 +514,7 @@ export default function MessageInput({
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (operationAllowed(generation) && !result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const isVideo = asset.type === "video";
         const sizeInBytes = asset.fileSize || asset.size || asset.file?.size;
@@ -444,6 +537,8 @@ export default function MessageInput({
   };
 
   const handlePickDocument = async () => {
+    if (!operationAllowed()) return;
+    const generation = operationRef.current.generation;
     setPickerVisible(false);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -451,7 +546,7 @@ export default function MessageInput({
         copyToCacheDirectory: true,
       });
 
-      if (!result.canceled && result.assets && result.assets.length > 0) {
+      if (operationAllowed(generation) && !result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const sizeInBytes = asset.size || asset.fileSize || asset.file?.size;
         onSelectAttachment?.({
@@ -495,8 +590,8 @@ export default function MessageInput({
       style={[
         styles.outerWrap,
         {
-          backgroundColor: t.bg,
-          borderTopColor: t.borderColor,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
           paddingBottom: dynamicPaddingBottom,
         },
       ]}
@@ -674,13 +769,12 @@ export default function MessageInput({
 
       {/* Input row or Voice Recording active row */}
       {isRecording ? (
-        <View style={[styles.inputRow, { backgroundColor: t.bg }]}>
+        <View style={[styles.inputRow, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
           <TouchableOpacity
             onPress={cancelRecording}
-            style={[
-              styles.attachBtn,
-              { backgroundColor: t.cardBg, borderColor: t.borderColor },
-            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel recording"
+            style={styles.attachBtn}
           >
             <Text
               style={{ color: t.textMuted, fontWeight: "700", fontSize: 14 }}
@@ -693,7 +787,6 @@ export default function MessageInput({
             style={[
               styles.inputWrap,
               styles.recordingActiveWrap,
-              { backgroundColor: t.cardBg, borderColor: t.accent },
             ]}
           >
             <BlurView
@@ -726,42 +819,40 @@ export default function MessageInput({
 
           <TouchableOpacity
             onPress={stopAndSendRecording}
-            style={[styles.sendBtn, { backgroundColor: t.accent }]}
+            accessibilityRole="button"
+            accessibilityLabel="Send voice message"
+            style={[styles.sendBtn, { backgroundColor: t.buttonBg }]}
           >
             <SendIcon color="#fff" />
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={[styles.inputRow, { backgroundColor: t.bg }]}>
-          {/* Paperclip attach button */}
+        <View style={[styles.inputRow, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
           <TouchableOpacity
-            onPress={() => setPickerVisible(true)}
-            style={[
-              styles.attachBtn,
-              { backgroundColor: t.cardBg, borderColor: t.borderColor },
-            ]}
-            activeOpacity={0.7}
+            onPress={() => {
+              if (!operationAllowed()) return;
+              Keyboard.dismiss();
+              setEmojiPickerVisible(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Choose emoji"
+            accessibilityState={{ expanded: emojiPickerVisible }}
+            style={styles.attachBtn}
           >
-            <PaperclipIcon color={t.accent} />
+            <SmileIcon color={t.textMuted} />
           </TouchableOpacity>
 
-          <View
-            style={[
-              styles.inputWrap,
-              { backgroundColor: t.inputBg, borderColor: t.borderColor },
-            ]}
-          >
-            <BlurView
-              intensity={t.isDark ? 40 : 60}
-              tint={t.isDark ? "dark" : "light"}
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
-            />
+          <View style={styles.inputWrap}>
             <TextInput
               ref={inputRef}
               value={value}
               onChangeText={handleChange}
-              placeholder="Message..."
+              selection={emojiSelection}
+              onSelectionChange={({ nativeEvent }) => {
+                selectionRef.current = nativeEvent.selection;
+                setEmojiSelection(undefined);
+              }}
+              placeholder="Message"
               placeholderTextColor={t.textMuted}
               style={[styles.input, { color: t.text }]}
               multiline
@@ -771,13 +862,25 @@ export default function MessageInput({
             />
           </View>
 
+          <TouchableOpacity
+            onPress={() => setPickerVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Attach file"
+            style={styles.attachBtn}
+            activeOpacity={0.7}
+          >
+            <PaperclipIcon color={t.textMuted} />
+          </TouchableOpacity>
+
           {canSend ? (
             <TouchableOpacity
               onPress={handleSend}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
               disabled={!canSend}
               style={[
                 styles.sendBtn,
-                { backgroundColor: canSend ? t.accent : t.cardBg },
+                { backgroundColor: canSend ? t.buttonBg : t.cardBg },
               ]}
               activeOpacity={0.8}
             >
@@ -790,7 +893,9 @@ export default function MessageInput({
           ) : (
             <TouchableOpacity
               onPress={startRecording}
-              style={[styles.sendBtn, { backgroundColor: t.accent }]}
+              accessibilityRole="button"
+              accessibilityLabel="Record voice message"
+              style={[styles.sendBtn, { backgroundColor: t.buttonBg }]}
               activeOpacity={0.8}
             >
               <MicIcon color="#fff" />
@@ -798,6 +903,33 @@ export default function MessageInput({
           )}
         </View>
       )}
+
+      <EmojiPicker
+        open={emojiPickerVisible && !disabled}
+        onClose={() => setEmojiPickerVisible(false)}
+        onEmojiSelected={handleEmojiSelected}
+        enableSearchBar
+        enableRecentlyUsed
+        categoryPosition="top"
+        theme={{
+          container: t.cardBg,
+          header: t.text,
+          knob: t.textMuted,
+          skinTonesContainer: t.inputBg,
+          category: {
+            icon: t.textMuted,
+            iconActive: t.accent,
+            container: t.cardBg,
+            containerActive: t.inputBg,
+          },
+          search: {
+            background: t.inputBg,
+            text: t.text,
+            placeholder: t.textMuted,
+            icon: t.textMuted,
+          },
+        }}
+      />
 
       {/* Attachment Modal */}
       <Modal
@@ -925,33 +1057,35 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: "row",
     alignItems: "flex-end",
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    paddingBottom: 4,
+    gap: 2,
+    marginHorizontal: 10,
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 4,
+    borderWidth: 1,
+    borderRadius: 28,
+    minHeight: 54,
   },
   attachBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   inputWrap: {
     flex: 1,
-    borderRadius: 22,
-    borderWidth: 1,
+    minWidth: 0,
     overflow: "hidden",
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    maxHeight: 130,
+    paddingHorizontal: 4,
+    paddingVertical: 12,
+    minHeight: 44,
   },
   input: {
     fontSize: 15,
     lineHeight: 20,
+    maxHeight: 106,
     padding: 0,
     margin: 0,
   },

@@ -31,9 +31,10 @@ export const conversationService = {
         return apiFetch(`/conversations/${conversationId}/pins`);
     },
 
-    async sendMessage(conversationId, content, messageType = "text", replyToId = null, mediaUrl = null, fileName = null) {
+    async sendMessage(conversationId, content, messageType = "text", replyToId = null, mediaUrl = null, fileName = null, signal = null) {
         return apiFetch(`/conversations/${conversationId}/messages`, {
             method: "POST",
+            signal,
             body: JSON.stringify({
                 content,
                 message_type: messageType,
@@ -52,12 +53,13 @@ export const conversationService = {
         });
     },
 
-    async uploadFile(fileFormData, onProgress) {
+    async uploadFile(fileFormData, onProgress, signal = null) {
         if (onProgress) {
-            return uploadFileWithProgress(fileFormData, onProgress);
+            return uploadFileWithProgress(fileFormData, onProgress, signal);
         }
         return apiFetch("/upload", {
             method: "POST",
+            signal,
             body: fileFormData,
         });
     },

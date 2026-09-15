@@ -11,6 +11,9 @@ import {
   Alert,
   Animated,
   Dimensions,
+  ScrollView,
+  Image,
+  AccessibilityInfo,
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
@@ -23,6 +26,9 @@ import {
 import Svg, { Path, Defs, LinearGradient, Stop } from "react-native-svg";
 import { BlurView } from "expo-blur";
 import { authService } from "../services/auth";
+import { THEMES } from "../theme/colors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AuthBackground, AnimatedBrand } from "../components/common/AuthMotion";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -209,25 +215,28 @@ function GoogleIcon() {
 }
 
 // FlowChat parallelogram logo
-function FlowChatLogo() {
+function FlowChatLogo({ theme }) {
   return (
     <View style={styles.logoRow}>
-      <View style={styles.logoParallelogramWrap}>
-        <View style={[styles.parallelogram, { backgroundColor: THEME.text }]} />
-        <View
-          style={[
-            styles.parallelogram,
-            { backgroundColor: THEME.text, marginLeft: 2 },
-          ]}
-        />
-      </View>
-      <Text style={[styles.brandName, { color: THEME.text }]}>FlowChat</Text>
+      <Image source={require("../../assets/logo-mark-light-theme.png")} style={{ width: 32, height: 32, tintColor: theme.accent }} />
+      <Text style={[styles.brandName, { color: theme.text }]}>FlowChat</Text>
     </View>
   );
 }
 
 export default function LoginScreen({ onLoginSuccess }) {
-  const t = THEME;
+  const t = THEMES.dark;
+  const insets = useSafeAreaInsets();
+  const [reducedMotion, setReducedMotion] = useState(true);
+  useEffect(() => {
+    let active = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) setReducedMotion(enabled);
+    }).catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
+    return () => { active = false; subscription.remove(); };
+  }, []);
+  const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [identifier, setIdentifier] = useState("");
   const [email, setEmail] = useState("");
@@ -244,7 +253,16 @@ export default function LoginScreen({ onLoginSuccess }) {
   ).current;
 
   useEffect(() => {
-    Animated.sequence([
+    if (reducedMotion) {
+      fadeAnim.setValue(1);
+      slideAnim.setValue(0);
+      formItems.forEach((item) => item.setValue(1));
+      return;
+    }
+    fadeAnim.setValue(0);
+    slideAnim.setValue(20);
+    formItems.forEach((item) => item.setValue(0));
+    const entrance = Animated.sequence([
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -269,8 +287,10 @@ export default function LoginScreen({ onLoginSuccess }) {
           }),
         ),
       ),
-    ]).start();
-  }, []);
+    ]);
+    entrance.start();
+    return () => entrance.stop();
+  }, [reducedMotion, fadeAnim, slideAnim, formItems]);
 
   // Google OAuth configuration
   const discovery = AuthSession.useAutoDiscovery("https://accounts.google.com");
@@ -349,7 +369,7 @@ export default function LoginScreen({ onLoginSuccess }) {
   };
 
   const handleSubmit = async () => {
-    if (loading) return;
+    if (loading || googleLoading) return;
     if (!identifier.trim() || !password.trim()) {
       setError("Please fill in all required fields.");
       return;
@@ -406,42 +426,39 @@ export default function LoginScreen({ onLoginSuccess }) {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: t.pageBg }]}
+      style={[styles.container, { backgroundColor: t.bg }]}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      {/* Background wave lines */}
-      <WaveLines />
-
+      <AuthBackground theme={t} reducedMotion={reducedMotion} />
+      <ScrollView
+        style={{ flex: 1, width: "100%" }}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
       <Animated.View
         style={[
           styles.card,
           {
             opacity: fadeAnim,
             transform: [{ translateY: slideAnim }],
-            backgroundColor: t.cardBg,
-            borderColor: t.cardBorder,
           },
         ]}
       >
-        <BlurView
-          intensity={45}
-          tint="dark"
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { zIndex: -1 }]}
-        />
-        {/* Logo */}
-        {renderFormItem(<FlowChatLogo />, formIndex++)}
+        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 32 }}>
+          <AnimatedBrand theme={t} reducedMotion={reducedMotion} />
+        </View>
 
         {/* Title */}
         {renderFormItem(
           <View>
             <Text style={[styles.title, { color: t.text }]}>
-              {isSignUp ? "Sign Up" : "Sign In"}
+              {isSignUp ? "Create your account" : "Welcome back"}
             </Text>
             <Text style={[styles.subtitle, { color: t.textMuted }]}>
               {isSignUp
-                ? "Create an account to start chatting"
-                : "Continue to access your chats"}
+                ? "A place for your conversations."
+                : "Sign in to FlowChat."}
             </Text>
           </View>,
           formIndex++,
@@ -450,8 +467,8 @@ export default function LoginScreen({ onLoginSuccess }) {
         {/* Error */}
         {error &&
           renderFormItem(
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{error}</Text>
+            <View accessibilityLiveRegion="polite" style={[styles.errorBox, { borderColor: t.danger, backgroundColor: t.cardBg }]}>
+              <Text style={[styles.errorText, { color: t.danger }]}>{error}</Text>
             </View>,
             formIndex++,
           )}
@@ -459,9 +476,9 @@ export default function LoginScreen({ onLoginSuccess }) {
         {/* Google Sign In */}
         {renderFormItem(
           <TouchableOpacity
-            style={[styles.googleBtn, { borderColor: t.inputBorder }]}
+            style={styles.googleBtn}
             onPress={handleGoogleButtonPress}
-            disabled={(Platform.OS === "web" && !request) || googleLoading}
+            disabled={(Platform.OS === "web" && !request) || googleLoading || loading}
             activeOpacity={0.8}
           >
             {googleLoading ? (
@@ -503,7 +520,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                   {
                     borderColor: t.inputBorder,
                     color: t.text,
-                    backgroundColor: "rgba(2,21,38,0.5)",
+                    backgroundColor: t.inputBg,
                   },
                 ]}
                 placeholder="Choose a username"
@@ -528,7 +545,7 @@ export default function LoginScreen({ onLoginSuccess }) {
                 {
                   borderColor: t.inputBorder,
                   color: t.text,
-                  backgroundColor: "rgba(2,21,38,0.5)",
+                  backgroundColor: t.inputBg,
                 },
               ]}
               placeholder={
@@ -548,21 +565,35 @@ export default function LoginScreen({ onLoginSuccess }) {
         {renderFormItem(
           <View>
             <Text style={[styles.label, { color: t.text }]}>Password</Text>
+            <View style={{ position: "relative" }}>
             <TextInput
               style={[
                 styles.input,
                 {
                   borderColor: t.inputBorder,
                   color: t.text,
-                  backgroundColor: "rgba(2,21,38,0.5)",
+                  backgroundColor: t.inputBg,
+                  paddingRight: 56,
                 },
               ]}
               placeholder="Enter your password"
               placeholderTextColor={t.textMuted}
               value={password}
               onChangeText={setPassword}
-              secureTextEntry
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete={isSignUp ? "new-password" : "current-password"}
+              accessibilityLabel="Password"
+              onSubmitEditing={handleSubmit}
             />
+            <TouchableOpacity onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button" accessibilityLabel={showPassword ? "Hide password" : "Show password"} style={{ position: "absolute", right: 4, top: 1, width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+              <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <Path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" stroke={t.textMuted} strokeWidth="1.7" />
+                {showPassword && <Path d="M3 3l18 18" stroke={t.textMuted} strokeWidth="1.7" />}
+              </Svg>
+            </TouchableOpacity>
+            </View>
           </View>,
           formIndex++,
         )}
@@ -572,17 +603,17 @@ export default function LoginScreen({ onLoginSuccess }) {
           <TouchableOpacity
             style={[
               styles.submitBtn,
-              { backgroundColor: t.buttonBg, opacity: loading ? 0.7 : 1 },
+              { borderColor: t.accent, opacity: loading || googleLoading ? 0.5 : 1 },
             ]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || googleLoading}
             activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={[styles.submitBtnText, { color: t.buttonText }]}>
-                {isSignUp ? "Sign Up" : "Sign In"}
+              <Text style={[styles.submitBtnText, { color: t.accent }]}>
+                {isSignUp ? "Create account" : "Sign in"}
               </Text>
             )}
           </TouchableOpacity>,
@@ -595,7 +626,9 @@ export default function LoginScreen({ onLoginSuccess }) {
             onPress={() => {
               setIsSignUp(!isSignUp);
               setError(null);
+              setShowPassword(false);
             }}
+            disabled={loading || googleLoading}
             style={styles.switchBtn}
           >
             <Text style={[styles.switchText, { color: t.textMuted }]}>
@@ -617,8 +650,7 @@ export default function LoginScreen({ onLoginSuccess }) {
         )}
       </Animated.View>
 
-      {/* Moving Wave Animation at the Bottom */}
-      <BottomMovingWaves />
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -626,11 +658,8 @@ export default function LoginScreen({ onLoginSuccess }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    overflow: "hidden",
   },
+  scrollContent: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
   bottomWaveContainer: {
     position: "absolute",
     bottom: 0,
@@ -657,24 +686,12 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "100%",
-    maxWidth: 420,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    padding: 28,
-    zIndex: 2,
-    overflow: "hidden",
-    // Glassmorphism effect
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 25 },
-    shadowOpacity: 0.6,
-    shadowRadius: 50,
-    elevation: 20,
+    maxWidth: 380,
   },
   logoRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginBottom: 20,
   },
   logoParallelogramWrap: {
     flexDirection: "row",
@@ -687,35 +704,34 @@ const styles = StyleSheet.create({
     transform: [{ skewX: "-12deg" }],
   },
   brandName: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: "#e2e8f0",
-    letterSpacing: 0.3,
+    fontSize: 24,
+    fontWeight: "700",
+    letterSpacing: 0,
   },
   title: {
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: "700",
-    letterSpacing: -0.3,
-    marginBottom: 4,
+    letterSpacing: 0,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "500",
-    letterSpacing: 0.2,
-    marginBottom: 20,
+    letterSpacing: 0,
+    marginBottom: 28,
   },
   errorBox: {
     backgroundColor: "rgba(234, 67, 53, 0.12)",
     borderColor: "rgba(234, 67, 53, 0.2)",
     borderWidth: 1.5,
-    borderRadius: 999,
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 16,
   },
   errorText: {
     color: "#EA4335",
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
   },
@@ -724,9 +740,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingVertical: 13,
+    borderRadius: 23,
+    minHeight: 46,
+    backgroundColor: "transparent",
+    paddingVertical: 10,
     marginBottom: 10,
   },
   googleIconWrap: {
@@ -743,14 +760,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   googleBtnText: {
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: "700",
   },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginVertical: 16,
+    marginVertical: 12,
   },
   dividerLine: {
     flex: 1,
@@ -762,34 +779,38 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   label: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
     marginBottom: 8,
     paddingHorizontal: 4,
   },
   input: {
-    borderRadius: 999,
+    borderRadius: 23,
+    minHeight: 46,
     borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingVertical: 13,
-    fontSize: 13,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    fontSize: 16,
     fontWeight: "500",
     marginBottom: 16,
   },
   submitBtn: {
-    borderRadius: 999,
-    paddingVertical: 14,
+    borderRadius: 23,
+    minHeight: 46,
+    borderWidth: 1,
+    backgroundColor: "transparent",
+    paddingVertical: 11,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0,
     shadowRadius: 10,
-    elevation: 6,
+    elevation: 0,
   },
   submitBtnText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "700",
   },
   switchBtn: {
@@ -797,7 +818,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   switchText: {
-    fontSize: 12,
+    fontSize: 14,
+    textAlign: "center",
     fontWeight: "500",
   },
 });

@@ -27,6 +27,7 @@ export default function ContextMenu({
   onPin,
   onDelete,
   onClose,
+  interactionsDisabled = false,
 }) {
   if (!message) return null;
 
@@ -41,7 +42,7 @@ export default function ContextMenu({
       onPress: onPin,
     },
     ...(isOwn ? [{ label: "Delete", onPress: onDelete, danger: true }] : []),
-  ];
+  ].filter((action) => !interactionsDisabled || action.onPress === onCopy);
 
   return (
     <Modal
@@ -60,7 +61,7 @@ export default function ContextMenu({
               ]}
             >
               {/* Emoji Quick Reactions Bar */}
-              <View
+              {!interactionsDisabled && <View
                 style={[styles.emojiBar, { borderBottomColor: t.borderColor }]}
               >
                 {REACTION_EMOJIS.map((emoji) => (
@@ -76,7 +77,7 @@ export default function ContextMenu({
                     <Text style={{ fontSize: 22 }}>{emoji}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </View>}
 
               {/* Preview of selected message */}
               {message.content ? (
@@ -106,7 +107,7 @@ export default function ContextMenu({
                   <Text
                     style={[
                       styles.actionText,
-                      { color: action.danger ? "#ef4444" : t.text },
+                      { color: action.danger ? t.danger : t.text },
                     ]}
                   >
                     {action.label}

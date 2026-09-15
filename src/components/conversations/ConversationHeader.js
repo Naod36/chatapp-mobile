@@ -113,12 +113,10 @@ export default function ConversationHeader({
   theme: t,
   avatarUri,
   displayName,
-  onThemePress,
   onAccountPress,
 }) {
   const insets = useSafeAreaInsets();
   const { updateBannerVisible } = useApp();
-  const ThemeToggleIcon = t.isDark ? SunIcon : MoonIcon;
 
   return (
     <View
@@ -148,7 +146,7 @@ export default function ConversationHeader({
                     ? require("../../../assets/logo-mark-dark-theme.png")
                     : require("../../../assets/logo-mark-light-theme.png")
                 }
-                style={styles.brandLogo}
+                style={[styles.brandLogo, { tintColor: t.accent }]}
               />
               <Text style={[styles.appName, { color: t.text }]}>FlowChat</Text>
             </View>
@@ -157,13 +155,6 @@ export default function ConversationHeader({
           )}
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={onThemePress}
-            style={[styles.headerIconBtn, { backgroundColor: t.accent + "18" }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <ThemeToggleIcon color={t.accent} />
-          </TouchableOpacity>
           <TouchableOpacity
             onPress={onAccountPress}
             style={[styles.headerIconBtn, { backgroundColor: t.accent + "18" }]}

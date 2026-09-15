@@ -86,7 +86,7 @@ export default function ConfirmDialog({
                 paddingVertical: 8,
                 paddingHorizontal: 14,
                 borderRadius: 8,
-                backgroundColor: destructive ? "#ef4444" : t.accent,
+                backgroundColor: destructive ? "#ac343f" : t.buttonBg,
               }}
             >
               <Text style={{ fontSize: 13, fontWeight: "800", color: "#fff" }}>

@@ -2,13 +2,22 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { conversationService } from "../services/conversations";
 import { websocketService } from "../services/websocket";
 import { useApp } from "../context/AppContext";
+import { redactMessage } from "../utils/blockPolicy";
 
 /**
  * useMessages — manages message list and pinned messages for a conversation.
  */
-export function useMessages(convId, conversationPinnedId = null) {
-    const { user, markConversationRead } = useApp();
+export function useMessages(convId, conversationPinnedId = null, conversation = {}) {
+    const { user, markConversationRead, blockStateVersion, blockStateReady, getBlockPolicy, isBlockedBy, blockedByUserIds } = useApp();
     const currentUserId = String(user?.userId || user?.user_id || "");
+    const isGroup = conversation.type === "group";
+    const otherUserId = conversation.other_participant?.user_id || conversation.other_participant?.id;
+    const interactionRef = useRef(null);
+    interactionRef.current = () => !isGroup && (!blockStateReady || getBlockPolicy(otherUserId).preventDirectInteraction);
+    const assertInteractionAllowed = useCallback(() => {
+        if (interactionRef.current()) throw new Error("Direct messaging is unavailable for this conversation.");
+    }, []);
+    const suppressReceipts = !blockStateReady || interactionRef.current() || (isGroup && blockedByUserIds.length > 0);
 
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -16,28 +25,50 @@ export function useMessages(convId, conversationPinnedId = null) {
     const [typingUser, setTypingUser] = useState(null);
 
     const typingTimerRef = useRef(null);
+    const sendControllersRef = useRef(new Set());
+    const loadedConversationRef = useRef(null);
+
+    useEffect(() => {
+        setTypingUser(null);
+        if (interactionRef.current()) {
+            sendControllersRef.current.forEach((controller) => controller.abort());
+        }
+    }, [blockStateVersion, blockStateReady, convId]);
+
+    useEffect(() => () => {
+        sendControllersRef.current.forEach((controller) => controller.abort());
+    }, [convId]);
 
     // ─── Initial load ─────────────────────────────────────────────────────────
     useEffect(() => {
         if (!convId) return;
+        if (loadedConversationRef.current !== convId) {
+            loadedConversationRef.current = convId;
+            setMessages([]);
+            setPinnedMessages([]);
+        }
         let cancelled = false;
         setLoading(true);
 
         // Fetch messages and pinned messages concurrently
         Promise.all([
-            conversationService.getMessages(convId).catch(() => []),
-            conversationService.getPinnedMessages(convId).catch(() => []),
+            conversationService.getMessages(convId),
+            conversationService.getPinnedMessages(convId),
         ])
             .then(([msgsData, pinsData]) => {
                 if (cancelled) return;
                 const sortedMsgs = (msgsData || []).sort(
                     (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)
                 );
-                setMessages(sortedMsgs);
+                setMessages((previous) => {
+                    const byId = new Map(previous.map((message) => [String(message.id || message.message_id), message]));
+                    sortedMsgs.forEach((message) => byId.set(String(message.id || message.message_id), message));
+                    return [...byId.values()].sort((first, second) => new Date(first.created_at || 0) - new Date(second.created_at || 0));
+                });
 
                 if (Array.isArray(pinsData) && pinsData.length > 0) {
                     setPinnedMessages(pinsData);
-                } else if (conversationPinnedId) {
+                } else if (conversationPinnedId && !blockStateVersion) {
                     const fallback = sortedMsgs.find(m => String(m.id || m.message_id) === String(conversationPinnedId));
                     if (fallback) {
                         setPinnedMessages([{ ...fallback, scope: "shared" }]);
@@ -50,11 +81,11 @@ export function useMessages(convId, conversationPinnedId = null) {
             .finally(() => { if (!cancelled) setLoading(false); });
 
         // Mark conversation as read on open
-        websocketService.send({ action: "read_conversation", conversation_id: convId });
+        if (!interactionRef.current()) websocketService.send({ action: "read_conversation", conversation_id: convId });
         markConversationRead(convId);
 
         return () => { cancelled = true; };
-    }, [convId, conversationPinnedId]); // eslint-disable-line
+    }, [convId, conversationPinnedId, blockStateVersion, blockStateReady]); // eslint-disable-line
 
     // ─── WebSocket subscription ───────────────────────────────────────────────
     useEffect(() => {
@@ -74,38 +105,29 @@ export function useMessages(convId, conversationPinnedId = null) {
 
                 setMessages(prev => {
                     if (msgId && prev.some(m => String(m.id || m.message_id) === String(msgId))) {
-                        return prev;
-                    }
-                    if (String(msg.sender_id) === currentUserId) {
-                        const tempIdx = prev.findIndex(
-                            m => String(m.id || "").startsWith("temp-")
-                        );
-                        if (tempIdx !== -1) {
-                            const updated = [...prev];
-                            updated[tempIdx] = { ...msg, status: msg.status || "sent" };
-                            return updated;
-                        }
+                        return prev.map(message => String(message.id || message.message_id) === String(msgId)
+                            ? { ...message, ...msg, id: msgId, message_id: msgId,
+                                status: ["read", "delivered"].find(status => status === message.status || status === msg.status)
+                                    || msg.status || message.status || "sent" }
+                            : message);
                     }
                     return [...prev, { ...msg, status: msg.status || "sent" }];
                 });
 
                 if (String(msg.sender_id) !== currentUserId) {
-                    websocketService.send({ action: "read_conversation", conversation_id: convId });
+                    if (!interactionRef.current()) websocketService.send({ action: "read_conversation", conversation_id: convId });
                     markConversationRead(convId);
                 }
             } else if (event === "message_sent" && isCurrentConv(data)) {
-                setMessages(prev => prev.map(m => {
-                    if (String(m.id || "").startsWith("temp-") && String(m.sender_id) === currentUserId) {
-                        return { ...m, id: data.message_id, message_id: data.message_id, status: data.status || "sent" };
-                    }
-                    return m;
-                }));
+                return;
             } else if (event === "message_delivered" && isCurrentConv(data)) {
+                if (suppressReceipts) return;
                 setMessages(prev => prev.map(m =>
-                    m.status !== "read" ? { ...m, status: "delivered" } : m
+                    !["read", "failed", "sending"].includes(m.status) ? { ...m, status: "delivered" } : m
                 ));
             } else if (event === "read_update" && isCurrentConv(data)) {
-                setMessages(prev => prev.map(m => ({ ...m, status: "read" })));
+                if (suppressReceipts) return;
+                setMessages(prev => prev.map(m => ["failed", "sending"].includes(m.status) ? m : ({ ...m, status: "read" })));
             } else if (event === "message_deleted" && isCurrentConv(data)) {
                 const deletedId = String(data.message_id);
                 setMessages(prev => prev.filter(
@@ -178,6 +200,7 @@ export function useMessages(convId, conversationPinnedId = null) {
             } else if ((event === "typing" || event === "typing_status") && isCurrentConv(data)) {
                 const senderId = String(data.user_id || data.sender_id || "");
                 if (senderId === currentUserId) return;
+                if (!blockStateReady || interactionRef.current() || !senderId || getBlockPolicy(senderId).hideIdentity) return;
                 const isTyping = data.is_typing ?? data.typing ?? false;
                 if (isTyping) {
                     setTypingUser(data.username || data.sender_name || "Someone");
@@ -194,10 +217,11 @@ export function useMessages(convId, conversationPinnedId = null) {
             unsubscribe();
             if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
         };
-    }, [convId, user?.token, currentUserId]); // eslint-disable-line
+    }, [convId, user?.token, currentUserId, blockStateVersion, blockStateReady, suppressReceipts]); // eslint-disable-line
 
     // ─── Reactions ────────────────────────────────────────────────────────────
     const toggleReaction = useCallback((msgId, emoji) => {
+        assertInteractionAllowed();
         if (!convId || !msgId || !emoji) return;
         websocketService.send({
             action: "react_message",
@@ -208,7 +232,9 @@ export function useMessages(convId, conversationPinnedId = null) {
     }, [convId]);
 
     // ─── Send message ─────────────────────────────────────────────────────────
-    const sendMessage = useCallback(async (text = "", replyToId = null, messageType = "text", mediaUrl = null, fileName = null) => {
+    const sendMessage = useCallback(async (text = "", replyToId = null, messageType = "text", mediaUrl = null, fileName = null, signal = null) => {
+        assertInteractionAllowed();
+        if (signal?.aborted) throw new Error("Send cancelled.");
         const contentStr = text?.trim() || "";
         if (!contentStr && !mediaUrl) return;
         if (!convId) return;
@@ -231,34 +257,35 @@ export function useMessages(convId, conversationPinnedId = null) {
 
         setMessages(prev => [...prev, tempMsg]);
 
-        const sent = websocketService.send({
-            action: "send_message",
-            conversation_id: convId,
-            content: contentStr,
-            message_type: messageType,
-            media_url: mediaUrl,
-            file_url: mediaUrl,
-            file_name: fileName,
-            reply_to_id: replyToId,
-        });
-
-        if (!sent) {
-            try {
-                const confirmed = await conversationService.sendMessage(convId, contentStr, messageType, replyToId, mediaUrl, fileName);
-                if (confirmed) {
-                    setMessages(prev => prev.map(m =>
-                        m.id === tempId ? { ...confirmed, status: "sent" } : m
-                    ));
-                }
-            } catch (err) {
-                console.error("Send via REST failed:", err.message);
-                setMessages(prev => prev.filter(m => m.id !== tempId));
-            }
+        const controller = new AbortController();
+        const abort = () => controller.abort();
+        signal?.addEventListener("abort", abort);
+        sendControllersRef.current.add(controller);
+        try {
+            const confirmed = await conversationService.sendMessage(convId, contentStr, messageType, replyToId, mediaUrl, fileName, controller.signal);
+            if (!confirmed?.id && !confirmed?.message_id) throw new Error("The server did not confirm this message.");
+            setMessages(prev => {
+                const confirmedId = String(confirmed.id || confirmed.message_id);
+                const optimistic = prev.find(message => message.id === tempId) || tempMsg;
+                const echo = prev.find(message => String(message.id || message.message_id) === confirmedId);
+                return prev.filter(message => message.id !== tempId && String(message.id || message.message_id) !== confirmedId)
+                    .concat({ ...optimistic, ...confirmed, ...echo, id: confirmedId, message_id: confirmedId,
+                        status: echo?.status || confirmed.status || "sent" });
+            });
+            return confirmed;
+        } catch (err) {
+            setMessages(prev => prev.map(message => message.id === tempId
+                ? { ...message, status: "failed", send_error: err.message } : message));
+            throw err;
+        } finally {
+            signal?.removeEventListener("abort", abort);
+            sendControllersRef.current.delete(controller);
         }
     }, [convId, currentUserId]);
 
     // ─── Edit message ─────────────────────────────────────────────────────────
     const editMessage = useCallback((msgId, newContent) => {
+        assertInteractionAllowed();
         if (!convId || !msgId || !newContent?.trim()) return;
         websocketService.send({
             action: "edit_message",
@@ -275,6 +302,7 @@ export function useMessages(convId, conversationPinnedId = null) {
 
     // ─── Pin message ──────────────────────────────────────────────────────────
     const pinMessage = useCallback(async (msgId, scope = "shared", notify = true) => {
+        assertInteractionAllowed();
         if (!convId || !msgId) return;
         const targetMsg = messages.find(m => String(m.id || m.message_id) === String(msgId)) || {
             id: msgId,
@@ -313,6 +341,7 @@ export function useMessages(convId, conversationPinnedId = null) {
 
     // ─── Unpin message ────────────────────────────────────────────────────────
     const unpinMessage = useCallback(async (msgId, scope = null) => {
+        assertInteractionAllowed();
         if (!convId || !msgId) return;
 
         // Optimistically update
@@ -336,6 +365,7 @@ export function useMessages(convId, conversationPinnedId = null) {
 
     // ─── Delete message ───────────────────────────────────────────────────────
     const deleteMessage = useCallback(async (msgId) => {
+        assertInteractionAllowed();
         try {
             await conversationService.deleteMessage(msgId);
             setMessages(prev => prev.filter(m => String(m.id || m.message_id) !== String(msgId)));
@@ -350,6 +380,7 @@ export function useMessages(convId, conversationPinnedId = null) {
     const lastTypingRef = useRef(0);
 
     const broadcastTyping = useCallback((isTyping) => {
+        if (interactionRef.current()) return;
         websocketService.send({
             action: "typing",
             conversation_id: convId,
@@ -372,10 +403,14 @@ export function useMessages(convId, conversationPinnedId = null) {
         broadcastTyping(false);
     }, [broadcastTyping]);
 
+    useEffect(() => () => {
+        if (typingBroadcastTimerRef.current) clearTimeout(typingBroadcastTimerRef.current);
+    }, [convId]);
+
     return {
-        messages,
+        messages: messages.map((message) => redactMessage(message, (userId) => !blockStateReady || isBlockedBy(userId))),
         loading,
-        pinnedMessages,
+        pinnedMessages: pinnedMessages.map((message) => redactMessage(message, (userId) => !blockStateReady || isBlockedBy(userId))),
         setPinnedMessages,
         typingUser,
         sendMessage,
@@ -386,5 +421,7 @@ export function useMessages(convId, conversationPinnedId = null) {
         toggleReaction,
         handleTypingStart,
         handleTypingStop,
+        assertInteractionAllowed,
+        suppressReceipts,
     };
 }

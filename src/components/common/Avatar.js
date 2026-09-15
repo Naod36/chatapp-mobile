@@ -23,14 +23,14 @@ function getAssetUrl(url) {
 }
 
 const AVATAR_COLORS = [
-  "#0284c7",
-  "#6366f1",
-  "#7c3aed",
-  "#db2777",
-  "#059669",
-  "#d97706",
-  "#dc2626",
-  "#0891b2",
+  "#39647b",
+  "#56617d",
+  "#725773",
+  "#875367",
+  "#326d60",
+  "#795e3f",
+  "#8a4d49",
+  "#396b70",
 ];
 
 function getColorForName(name) {
@@ -65,9 +65,9 @@ export default function Avatar({
   const resolvedUri = getAssetUrl(uri);
   const initial = name?.[0]?.toUpperCase() || (isGroup ? "G" : "?");
   const bgColor = isSaved
-    ? "linear-gradient(135deg, #de4977, #c93b66)"
+    ? "#875367"
     : isGroup
-      ? "#6366f1"
+      ? "#56617d"
       : getColorForName(name);
 
   const dotSize = Math.max(10, size * 0.26);
@@ -81,7 +81,7 @@ export default function Avatar({
             width: size,
             height: size,
             borderRadius: size / 2,
-            backgroundColor: typeof bgColor === "string" ? bgColor : "#4f46e5",
+            backgroundColor: bgColor,
           },
         ]}
       >
@@ -139,6 +139,6 @@ const styles = StyleSheet.create({
   },
   dot: {
     position: "absolute",
-    backgroundColor: "#22c55e",
+    backgroundColor: "#39836c",
   },
 });
