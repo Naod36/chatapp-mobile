@@ -9,6 +9,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authService } from "../services/auth";
 import { conversationService } from "../services/conversations";
+import { userService } from "../services/user";
 import { websocketService } from "../services/websocket";
 import {
   registerForPushNotificationsAsync,
@@ -28,6 +29,7 @@ export function AppProvider({ children }) {
   const [presenceMap, setPresenceMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
   const [updateBannerVisible, setUpdateBannerVisible] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState([]);
 
   const t = THEMES[themeKey] || THEMES.light;
 
@@ -62,6 +64,7 @@ export function AppProvider({ children }) {
     setConversations([]);
     setPresenceMap({});
     setTypingMap({});
+    setBlockedUserIds([]);
   }, []);
 
   // ─── Theme ───────────────────────────────────────────────────────────────
@@ -130,6 +133,39 @@ export function AppProvider({ children }) {
       cancelled = true;
     };
   }, [user?.token]);
+
+  // ─── Blocked users ────────────────────────────────────────────────────────
+  const refreshBlockedUsers = useCallback(async () => {
+    if (!user?.token) return;
+    try {
+      const list = await userService.getBlockedUsers();
+      setBlockedUserIds((list || []).map((u) => String(u.user_id)));
+    } catch (e) {
+      // Non-fatal — masking/blocking is best-effort on top of server enforcement.
+    }
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (user?.token) refreshBlockedUsers();
+    else setBlockedUserIds([]);
+  }, [user?.token]); // eslint-disable-line
+
+  const isBlocked = useCallback(
+    (userId) => blockedUserIds.includes(String(userId || "")),
+    [blockedUserIds],
+  );
+
+  const blockUser = useCallback(async (userId) => {
+    await userService.blockUser(userId);
+    setBlockedUserIds((prev) =>
+      prev.includes(String(userId)) ? prev : [...prev, String(userId)],
+    );
+  }, []);
+
+  const unblockUser = useCallback(async (userId) => {
+    await userService.unblockUser(userId);
+    setBlockedUserIds((prev) => prev.filter((id) => id !== String(userId)));
+  }, []);
 
   // ─── WebSocket: connect once when token available ────────────────────────
   useEffect(() => {
@@ -299,6 +335,11 @@ export function AppProvider({ children }) {
     typingMap,
     updateBannerVisible,
     setUpdateBannerVisible,
+    blockedUserIds,
+    isBlocked,
+    blockUser,
+    unblockUser,
+    refreshBlockedUsers,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

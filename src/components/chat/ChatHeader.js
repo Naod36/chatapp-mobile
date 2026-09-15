@@ -15,7 +15,13 @@ import { useApp } from "../../context/AppContext";
  * ChatHeader — top navigation bar for the chat screen.
  * Shows: back button, avatar + online dot, name, status/typing subtitle.
  */
-export default function ChatHeader({ conversation, typingUser, onBack, onMorePress }) {
+export default function ChatHeader({
+  conversation,
+  typingUser,
+  onBack,
+  onMorePress,
+  isBlocked = false,
+}) {
   const insets = useSafeAreaInsets();
   const { theme: t, getPresence, typingMap, updateBannerVisible } = useApp();
 
@@ -27,27 +33,36 @@ export default function ChatHeader({ conversation, typingUser, onBack, onMorePre
     !conversation?.other_participant && conversation?.type === "direct";
   const otherUser = conversation?.other_participant;
 
-  const name = isGroup
-    ? conversation?.title || conversation?.display_name || "Group Chat"
-    : isSaved
-      ? "Saved Messages"
-      : otherUser?.display_name || otherUser?.username || "Chat";
+  const name = isBlocked
+    ? "Person Not Available"
+    : isGroup
+      ? conversation?.title || conversation?.display_name || "Group Chat"
+      : isSaved
+        ? "Saved Messages"
+        : otherUser?.display_name || otherUser?.username || "Chat";
 
-  const avatarUri = isGroup ? conversation?.avatar_url : otherUser?.avatar_url;
+  const avatarUri = isBlocked
+    ? null
+    : isGroup
+      ? conversation?.avatar_url
+      : otherUser?.avatar_url;
 
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const presenceStatus = getPresence(otherUserId);
   const isOnline =
+    !isBlocked &&
     !isGroup &&
     !isSaved &&
     (presenceStatus === "online" ||
       otherUser?.status === "online" ||
       conversation?.status === "online");
 
-  const isTyping = Boolean(typingUser || typingMap?.[convIdStr]);
+  const isTyping = !isBlocked && Boolean(typingUser || typingMap?.[convIdStr]);
 
   let subtitle = "";
-  if (isTyping) {
+  if (isBlocked) {
+    subtitle = "";
+  } else if (isTyping) {
     subtitle = "typing...";
   } else if (isOnline) {
     subtitle = "online";

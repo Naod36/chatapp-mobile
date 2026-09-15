@@ -25,7 +25,7 @@ function formatTime(ts) {
  * Props: conversation, onPress, typingMap, theme, user
  */
 function ConversationItem({ conversation: c, onPress, isTyping }) {
-  const { theme: t, getPresence, user } = useApp();
+  const { theme: t, getPresence, user, isBlocked } = useApp();
   const isGroup = c.type === "group";
   const isSaved =
     c.id === "virtual-saved-messages" ||
@@ -33,11 +33,13 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
 
   const otherUser = c.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
+  const blocked = !isGroup && !isSaved && isBlocked(otherUserId);
 
   const presenceStatus = getPresence(otherUserId);
   const isOnline =
     !isGroup &&
     !isSaved &&
+    !blocked &&
     (presenceStatus === "online" ||
       otherUser?.status === "online" ||
       c.status === "online");
@@ -45,13 +47,15 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
   // isTyping comes from the parent via props (see ConversationListScreen renderItem)
   const hasUnread = (c.unread_count || 0) > 0;
 
-  const name = isSaved
-    ? "Saved Messages"
-    : c.display_name ||
-      c.title ||
-      otherUser?.display_name ||
-      otherUser?.username ||
-      "Chat";
+  const name = blocked
+    ? "Person Not Available"
+    : isSaved
+      ? "Saved Messages"
+      : c.display_name ||
+        c.title ||
+        otherUser?.display_name ||
+        otherUser?.username ||
+        "Chat";
 
   // Derive preview text — check multiple possible field names from API
   let rawPreview = c.last_message_content || c.last_message?.content || "";
@@ -63,10 +67,14 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
     else if (mt === "video") rawPreview = "Video";
   }
 
-  const preview = isTyping
-    ? "typing..."
-    : rawPreview ||
-      (isGroup ? `${c.participants?.length || 0} members` : "No messages yet");
+  const preview = blocked
+    ? "You can no longer message this person"
+    : isTyping
+      ? "typing..."
+      : rawPreview ||
+        (isGroup
+          ? `${c.participants?.length || 0} members`
+          : "No messages yet");
 
   const isOwnLastMsg =
     c.last_message && String(c.last_message.sender_id) === String(user?.userId);
@@ -78,7 +86,7 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
       activeOpacity={0.75}
     >
       <Avatar
-        uri={isGroup ? c.avatar_url : otherUser?.avatar_url}
+        uri={blocked ? null : isGroup ? c.avatar_url : otherUser?.avatar_url}
         name={name}
         size={50}
         isOnline={isOnline}

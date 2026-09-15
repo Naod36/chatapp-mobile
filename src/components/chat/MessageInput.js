@@ -190,6 +190,7 @@ export default function MessageInput({
   onClearAttachment,
   isUploading,
   uploadProgress,
+  disabled = false,
 }) {
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -467,6 +468,27 @@ export default function MessageInput({
       Alert.alert("Error", "Could not pick document: " + err.message);
     }
   };
+
+  if (disabled) {
+    return (
+      <View
+        style={[
+          styles.outerWrap,
+          {
+            backgroundColor: t.bg,
+            borderTopColor: t.borderColor,
+            paddingBottom: dynamicPaddingBottom,
+            paddingTop: 14,
+            alignItems: "center",
+          },
+        ]}
+      >
+        <Text style={{ color: t.textMuted, fontSize: 13, fontWeight: "600" }}>
+          You can't message this user
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View

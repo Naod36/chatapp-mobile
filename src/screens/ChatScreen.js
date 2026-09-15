@@ -15,9 +15,9 @@ import Svg, { Path } from "react-native-svg";
 import { useApp } from "../context/AppContext";
 import { useMessages } from "../hooks/useMessages";
 import { conversationService } from "../services/conversations";
-import { userService } from "../services/user";
 import ChatHeader from "../components/chat/ChatHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import ChatOptionsMenu from "../components/chat/ChatOptionsMenu";
 import MessageBubble from "../components/chat/MessageBubble";
 import MessageInput from "../components/chat/MessageInput";
 import PinnedBanner from "../components/chat/PinnedBanner";
@@ -41,7 +41,8 @@ function EmptyChatIcon({ color }) {
 }
 
 export default function ChatScreen({ route, navigation }) {
-  const { theme: t, user, typingMap } = useApp();
+  const { theme: t, user, typingMap, isBlocked, blockUser, unblockUser } =
+    useApp();
   const { conversation } = route.params;
   const convId = String(conversation.id || conversation.conversation_id);
   const currentUserId = String(user?.userId || user?.user_id || "");
@@ -58,40 +59,27 @@ export default function ChatScreen({ route, navigation }) {
   const otherUser = conversation?.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const canBlock = !isGroup && !!otherUserId;
-  const [isUserBlocked, setIsUserBlocked] = useState(false);
+  const isUserBlocked = canBlock && isBlocked(otherUserId);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
-
-  useEffect(() => {
-    if (!canBlock) return;
-    userService
-      .getBlockedUsers()
-      .then((list) => {
-        setIsUserBlocked(
-          (list || []).some((u) => String(u.user_id) === otherUserId),
-        );
-      })
-      .catch(() => {});
-  }, [canBlock, otherUserId]);
 
   const handleToggleBlock = useCallback(async () => {
     setShowBlockConfirm(false);
     try {
       if (isUserBlocked) {
-        await userService.unblockUser(otherUserId);
-        setIsUserBlocked(false);
+        await unblockUser(otherUserId);
         Alert.alert("Unblocked", "You can now message this user again.");
       } else {
-        await userService.blockUser(otherUserId);
-        setIsUserBlocked(true);
+        await blockUser(otherUserId);
         Alert.alert("Blocked", "This user can no longer message you.");
       }
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to update block status");
     }
-  }, [isUserBlocked, otherUserId]);
+  }, [isUserBlocked, otherUserId, blockUser, unblockUser]);
 
   const handleMorePress = useCallback(() => {
-    setShowBlockConfirm(true);
+    setShowOptionsMenu(true);
   }, []);
 
   const {
@@ -356,6 +344,7 @@ export default function ChatScreen({ route, navigation }) {
         typingUser={typingUser}
         onBack={() => navigation.goBack()}
         onMorePress={canBlock ? handleMorePress : undefined}
+        isBlocked={isUserBlocked}
       />
 
       <PinnedBanner
@@ -439,6 +428,7 @@ export default function ChatScreen({ route, navigation }) {
         onClearAttachment={() => setAttachment(null)}
         isUploading={isUploading}
         uploadProgress={uploadProgress}
+        disabled={isUserBlocked}
       />
 
       <ContextMenu
@@ -476,6 +466,14 @@ export default function ChatScreen({ route, navigation }) {
           unpinMessage(msg.message_id || msg.id, msg.scope)
         }
         onClose={() => setPinnedListVisible(false)}
+      />
+
+      <ChatOptionsMenu
+        visible={showOptionsMenu}
+        onClose={() => setShowOptionsMenu(false)}
+        theme={t}
+        isBlocked={isUserBlocked}
+        onToggleBlock={() => setShowBlockConfirm(true)}
       />
 
       <ConfirmDialog
