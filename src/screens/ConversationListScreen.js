@@ -541,7 +541,7 @@ function AccountPanel({
             backgroundColor: t.bg,
             borderColor: t.borderColor,
             paddingBottom: insets.bottom + 16,
-            maxHeight: windowHeight * 0.88,
+            height: windowHeight * 0.88,
             transform: [{ translateY: slideAnim }],
           },
         ]}
@@ -591,6 +591,8 @@ function AccountPanel({
             style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={styles.sheetBody}
             showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
           >
             {/* Avatar */}
             <View style={styles.avatarRow}>
