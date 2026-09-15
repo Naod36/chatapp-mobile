@@ -1,9 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   FlatList,
   StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   Alert,
@@ -72,6 +75,7 @@ export default function ChatScreen({ route, navigation }) {
   const isBlockedByThem = canBlock && isBlockedBy(otherUserId);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [isChatPinned, setIsChatPinned] = useState(false);
 
   const handleToggleBlock = useCallback(async () => {
     setShowBlockConfirm(false);
@@ -91,6 +95,23 @@ export default function ChatScreen({ route, navigation }) {
   const handleMorePress = useCallback(() => {
     setShowOptionsMenu(true);
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@flowchat_pinned_conversations").then((raw) => {
+      const ids = raw ? JSON.parse(raw) : [];
+      setIsChatPinned(ids.includes(convId));
+    }).catch(() => {});
+  }, [convId]);
+
+  const handleToggleChatPin = useCallback(async () => {
+    const raw = await AsyncStorage.getItem("@flowchat_pinned_conversations");
+    const ids = raw ? JSON.parse(raw) : [];
+    const next = isChatPinned
+      ? ids.filter((id) => id !== convId)
+      : [...ids.filter((id) => id !== convId), convId];
+    await AsyncStorage.setItem("@flowchat_pinned_conversations", JSON.stringify(next));
+    setIsChatPinned(!isChatPinned);
+  }, [convId, isChatPinned]);
 
   const {
     messages,
@@ -119,8 +140,33 @@ export default function ChatScreen({ route, navigation }) {
   const [attachment, setAttachment] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  const [messageSearchIndex, setMessageSearchIndex] = useState(0);
 
   const flatListRef = useRef(null);
+
+  const searchMatches = messageSearchQuery.trim()
+    ? messages.filter((message) =>
+        String(message.content || "").toLowerCase().includes(messageSearchQuery.trim().toLowerCase()),
+      )
+    : [];
+
+  useEffect(() => {
+    if (!searchMatches.length) return;
+    const match = searchMatches[messageSearchIndex % searchMatches.length];
+    const matchIndex = messages.findIndex(
+      (message) => String(message.id || message.message_id) === String(match.id || match.message_id),
+    );
+    if (matchIndex >= 0) {
+      flatListRef.current?.scrollToIndex({ index: matchIndex, animated: true, viewPosition: 0.5 });
+    }
+  }, [messageSearchIndex, messageSearchQuery, messages]);
+
+  const cycleSearch = useCallback((direction) => {
+    if (!searchMatches.length) return;
+    setMessageSearchIndex((index) => (index + direction + searchMatches.length) % searchMatches.length);
+  }, [searchMatches.length]);
 
   const handleToggleReaction = useCallback(
     (msg, emoji) => {
@@ -357,6 +403,25 @@ export default function ChatScreen({ route, navigation }) {
         isBlocked={isBlockedByThem}
       />
 
+      {messageSearchOpen && (
+        <View style={[styles.messageSearchBar, { backgroundColor: t.cardBg, borderColor: t.borderColor }]}> 
+          <TextInput
+            autoFocus
+            value={messageSearchQuery}
+            onChangeText={(value) => { setMessageSearchQuery(value); setMessageSearchIndex(0); }}
+            placeholder="Search messages..."
+            placeholderTextColor={t.textMuted}
+            style={[styles.messageSearchInput, { color: t.text }]}
+          />
+          <Text style={{ color: t.textMuted, fontSize: 12 }}>
+            {searchMatches.length ? `${messageSearchIndex + 1}/${searchMatches.length}` : "0 results"}
+          </Text>
+          <TouchableOpacity onPress={() => cycleSearch(-1)}><Text style={{ color: t.accent, fontSize: 18 }}>‹</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => cycleSearch(1)}><Text style={{ color: t.accent, fontSize: 18 }}>›</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => { setMessageSearchOpen(false); setMessageSearchQuery(""); }}><Text style={{ color: t.textMuted, fontSize: 16 }}>×</Text></TouchableOpacity>
+        </View>
+      )}
+
       <PinnedBanner
         pinnedMessages={pinnedMessages}
         activeIndex={activePinIndex}
@@ -483,6 +548,9 @@ export default function ChatScreen({ route, navigation }) {
         onClose={() => setShowOptionsMenu(false)}
         theme={t}
         isBlocked={isUserBlocked}
+        isPinned={isChatPinned}
+        onTogglePin={handleToggleChatPin}
+        onSearch={() => setMessageSearchOpen(true)}
         onToggleBlock={() => setShowBlockConfirm(true)}
       />
 
@@ -506,6 +574,22 @@ export default function ChatScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  messageSearchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  messageSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
+  },
   listContent: {
     flexGrow: 1,
     paddingTop: 10,

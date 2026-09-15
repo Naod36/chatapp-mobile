@@ -12,6 +12,9 @@ export default function ChatOptionsMenu({
   theme: t,
   isBlocked,
   onToggleBlock,
+  isPinned,
+  onTogglePin,
+  onSearch,
 }) {
   const insets = useSafeAreaInsets();
   if (!visible) return null;
@@ -38,6 +41,28 @@ export default function ChatOptionsMenu({
           },
         ]}
       >
+        <TouchableOpacity
+          style={styles.row}
+          activeOpacity={0.6}
+          onPress={() => {
+            onClose();
+            onSearch();
+          }}
+        >
+          <Text style={[styles.rowText, { color: t.text }]}>Search Messages</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.row}
+          activeOpacity={0.6}
+          onPress={() => {
+            onClose();
+            onTogglePin();
+          }}
+        >
+          <Text style={[styles.rowText, { color: t.text }]}>
+            {isPinned ? "Unpin Chat" : "Pin Chat"}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.row}
           activeOpacity={0.6}

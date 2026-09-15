@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
   Text,
@@ -1237,11 +1238,18 @@ export default function ConversationListScreen({ navigation }) {
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [myProfile, setMyProfile] = useState(null);
+  const [pinnedConversationIds, setPinnedConversationIds] = useState([]);
 
   useEffect(() => {
     userService
       .getProfile()
       .then((p) => p && setMyProfile(p))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem("@flowchat_pinned_conversations")
+      .then((raw) => setPinnedConversationIds(raw ? JSON.parse(raw) : []))
       .catch(() => {});
   }, []);
 
@@ -1372,7 +1380,11 @@ export default function ConversationListScreen({ navigation }) {
         />
       ) : (
         <FlatList
-          data={conversations}
+          data={[...conversations].sort((a, b) => {
+            const aPinned = pinnedConversationIds.includes(String(a.id || a.conversation_id));
+            const bPinned = pinnedConversationIds.includes(String(b.id || b.conversation_id));
+            return Number(bPinned) - Number(aPinned);
+          })}
           extraData={typingMap}
           keyExtractor={(item) => String(item.id || item.conversation_id)}
           renderItem={({ item }) => {
