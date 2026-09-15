@@ -41,8 +41,15 @@ function EmptyChatIcon({ color }) {
 }
 
 export default function ChatScreen({ route, navigation }) {
-  const { theme: t, user, typingMap, isBlocked, blockUser, unblockUser } =
-    useApp();
+  const {
+    theme: t,
+    user,
+    typingMap,
+    isBlocked,
+    isBlockedBy,
+    blockUser,
+    unblockUser,
+  } = useApp();
   const { conversation } = route.params;
   const convId = String(conversation.id || conversation.conversation_id);
   const currentUserId = String(user?.userId || user?.user_id || "");
@@ -59,7 +66,10 @@ export default function ChatScreen({ route, navigation }) {
   const otherUser = conversation?.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const canBlock = !isGroup && !!otherUserId;
+  // isUserBlocked: I blocked them (I still see their real name/photo, just can't message them).
+  // isBlockedByThem: they blocked me (my identity gets masked from their side, not mine).
   const isUserBlocked = canBlock && isBlocked(otherUserId);
+  const isBlockedByThem = canBlock && isBlockedBy(otherUserId);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
@@ -344,7 +354,7 @@ export default function ChatScreen({ route, navigation }) {
         typingUser={typingUser}
         onBack={() => navigation.goBack()}
         onMorePress={canBlock ? handleMorePress : undefined}
-        isBlocked={isUserBlocked}
+        isBlocked={isBlockedByThem}
       />
 
       <PinnedBanner
@@ -428,7 +438,7 @@ export default function ChatScreen({ route, navigation }) {
         onClearAttachment={() => setAttachment(null)}
         isUploading={isUploading}
         uploadProgress={uploadProgress}
-        disabled={isUserBlocked}
+        disabled={isUserBlocked || isBlockedByThem}
       />
 
       <ContextMenu

@@ -41,6 +41,10 @@ export const userService = {
         return apiFetch("/users/blocked");
     },
 
+    async getBlockedByUsers() {
+        return apiFetch("/users/blocked-by");
+    },
+
     async blockUser(userId) {
         return apiFetch(`/users/block/${userId}`, { method: "POST" });
     },

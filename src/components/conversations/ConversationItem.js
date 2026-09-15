@@ -25,7 +25,7 @@ function formatTime(ts) {
  * Props: conversation, onPress, typingMap, theme, user
  */
 function ConversationItem({ conversation: c, onPress, isTyping }) {
-  const { theme: t, getPresence, user, isBlocked } = useApp();
+  const { theme: t, getPresence, user, isBlockedBy } = useApp();
   const isGroup = c.type === "group";
   const isSaved =
     c.id === "virtual-saved-messages" ||
@@ -33,7 +33,8 @@ function ConversationItem({ conversation: c, onPress, isTyping }) {
 
   const otherUser = c.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
-  const blocked = !isGroup && !isSaved && isBlocked(otherUserId);
+  // Mask only when THEY blocked ME — if I blocked them, I still see them normally.
+  const blocked = !isGroup && !isSaved && isBlockedBy(otherUserId);
 
   const presenceStatus = getPresence(otherUserId);
   const isOnline =

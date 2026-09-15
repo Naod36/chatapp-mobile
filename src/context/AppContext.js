@@ -30,6 +30,7 @@ export function AppProvider({ children }) {
   const [typingMap, setTypingMap] = useState({});
   const [updateBannerVisible, setUpdateBannerVisible] = useState(false);
   const [blockedUserIds, setBlockedUserIds] = useState([]);
+  const [blockedByUserIds, setBlockedByUserIds] = useState([]);
 
   const t = THEMES[themeKey] || THEMES.light;
 
@@ -65,6 +66,7 @@ export function AppProvider({ children }) {
     setPresenceMap({});
     setTypingMap({});
     setBlockedUserIds([]);
+    setBlockedByUserIds([]);
   }, []);
 
   // ─── Theme ───────────────────────────────────────────────────────────────
@@ -166,6 +168,29 @@ export function AppProvider({ children }) {
     await userService.unblockUser(userId);
     setBlockedUserIds((prev) => prev.filter((id) => id !== String(userId)));
   }, []);
+
+  // ─── Blocked-by (users who have blocked ME) ──────────────────────────────
+  // Used to mask MY identity from someone who blocked me, while I (the
+  // blocker) still see the person I blocked normally.
+  const refreshBlockedByUsers = useCallback(async () => {
+    if (!user?.token) return;
+    try {
+      const ids = await userService.getBlockedByUsers();
+      setBlockedByUserIds((ids || []).map(String));
+    } catch (e) {
+      // Non-fatal
+    }
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (user?.token) refreshBlockedByUsers();
+    else setBlockedByUserIds([]);
+  }, [user?.token]); // eslint-disable-line
+
+  const isBlockedBy = useCallback(
+    (userId) => blockedByUserIds.includes(String(userId || "")),
+    [blockedByUserIds],
+  );
 
   // ─── WebSocket: connect once when token available ────────────────────────
   useEffect(() => {
@@ -340,6 +365,9 @@ export function AppProvider({ children }) {
     blockUser,
     unblockUser,
     refreshBlockedUsers,
+    blockedByUserIds,
+    isBlockedBy,
+    refreshBlockedByUsers,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

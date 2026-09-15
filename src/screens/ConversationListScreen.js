@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Switch,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -211,6 +212,7 @@ function AccountPanel({
   onProfileUpdated,
 }) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const slideAnim = useRef(new Animated.Value(600)).current;
 
   const panResponder = useRef(
@@ -539,6 +541,7 @@ function AccountPanel({
             backgroundColor: t.bg,
             borderColor: t.borderColor,
             paddingBottom: insets.bottom + 16,
+            maxHeight: windowHeight * 0.88,
             transform: [{ translateY: slideAnim }],
           },
         ]}
@@ -582,10 +585,10 @@ function AccountPanel({
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minHeight: 0 }}
         >
           <ScrollView
-            style={{ flex: 1 }}
+            style={{ flex: 1, minHeight: 0 }}
             contentContainerStyle={styles.sheetBody}
             showsVerticalScrollIndicator={false}
           >
@@ -1536,7 +1539,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 1,
     borderRightWidth: 1,
     overflow: "hidden",
-    maxHeight: "88%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.2,
