@@ -15,7 +15,7 @@ import { useApp } from "../../context/AppContext";
  * ChatHeader — top navigation bar for the chat screen.
  * Shows: back button, avatar + online dot, name, status/typing subtitle.
  */
-export default function ChatHeader({ conversation, typingUser, onBack }) {
+export default function ChatHeader({ conversation, typingUser, onBack, onMorePress }) {
   const insets = useSafeAreaInsets();
   const { theme: t, getPresence, typingMap, updateBannerVisible } = useApp();
 
@@ -109,6 +109,16 @@ export default function ChatHeader({ conversation, typingUser, onBack }) {
           </Text>
         ) : null}
       </View>
+
+      {onMorePress && (
+        <TouchableOpacity
+          onPress={onMorePress}
+          style={styles.moreBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={[styles.moreIcon, { color: t.textMuted }]}>⋮</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -153,5 +163,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     marginTop: 1,
+  },
+  moreBtn: {
+    paddingLeft: 4,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  moreIcon: {
+    fontSize: 20,
+    fontWeight: "700",
   },
 });

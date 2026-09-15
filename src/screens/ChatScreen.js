@@ -15,6 +15,7 @@ import Svg, { Path } from "react-native-svg";
 import { useApp } from "../context/AppContext";
 import { useMessages } from "../hooks/useMessages";
 import { conversationService } from "../services/conversations";
+import { userService } from "../services/user";
 import ChatHeader from "../components/chat/ChatHeader";
 import MessageBubble from "../components/chat/MessageBubble";
 import MessageInput from "../components/chat/MessageInput";
@@ -52,6 +53,56 @@ export default function ChatScreen({ route, navigation }) {
     String(conversation?.creator_id) === String(currentUserId) ||
     currentParticipant?.role === "admin" ||
     currentParticipant?.role === "creator";
+
+  const otherUser = conversation?.other_participant;
+  const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
+  const canBlock = !isGroup && !!otherUserId;
+  const [isUserBlocked, setIsUserBlocked] = useState(false);
+
+  useEffect(() => {
+    if (!canBlock) return;
+    userService
+      .getBlockedUsers()
+      .then((list) => {
+        setIsUserBlocked(
+          (list || []).some((u) => String(u.user_id) === otherUserId),
+        );
+      })
+      .catch(() => {});
+  }, [canBlock, otherUserId]);
+
+  const handleToggleBlock = useCallback(async () => {
+    try {
+      if (isUserBlocked) {
+        await userService.unblockUser(otherUserId);
+        setIsUserBlocked(false);
+        Alert.alert("Unblocked", "You can now message this user again.");
+      } else {
+        await userService.blockUser(otherUserId);
+        setIsUserBlocked(true);
+        Alert.alert("Blocked", "This user can no longer message you.");
+      }
+    } catch (e) {
+      Alert.alert("Error", e.message || "Failed to update block status");
+    }
+  }, [isUserBlocked, otherUserId]);
+
+  const handleMorePress = useCallback(() => {
+    Alert.alert(
+      isUserBlocked ? "Unblock User" : "Block User",
+      isUserBlocked
+        ? "Allow this user to message you again?"
+        : "This user won't be able to message you, and you won't be able to message them.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isUserBlocked ? "Unblock" : "Block",
+          style: "destructive",
+          onPress: handleToggleBlock,
+        },
+      ],
+    );
+  }, [isUserBlocked, handleToggleBlock]);
 
   const {
     messages,
@@ -314,6 +365,7 @@ export default function ChatScreen({ route, navigation }) {
         conversation={conversation}
         typingUser={typingUser}
         onBack={() => navigation.goBack()}
+        onMorePress={canBlock ? handleMorePress : undefined}
       />
 
       <PinnedBanner
