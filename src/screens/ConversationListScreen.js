@@ -711,7 +711,6 @@ function AccountPanel({
         </KeyboardAvoidingView>
       </Animated.View>
 
-
       <ConfirmDialog
         visible={showSignOutConfirm}
         title="Sign Out"
