@@ -218,7 +218,10 @@ function GoogleIcon() {
 function FlowChatLogo({ theme }) {
   return (
     <View style={styles.logoRow}>
-      <Image source={require("../../assets/logo-mark-light-theme.png")} style={{ width: 32, height: 32, tintColor: theme.accent }} />
+      <Image
+        source={require("../../assets/logo-mark-light-theme.png")}
+        style={{ width: 32, height: 32, tintColor: theme.accent }}
+      />
       <Text style={[styles.brandName, { color: theme.text }]}>FlowChat</Text>
     </View>
   );
@@ -230,11 +233,19 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [reducedMotion, setReducedMotion] = useState(true);
   useEffect(() => {
     let active = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (active) setReducedMotion(enabled);
-    }).catch(() => {});
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReducedMotion);
-    return () => { active = false; subscription.remove(); };
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (active) setReducedMotion(enabled);
+      })
+      .catch(() => {});
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReducedMotion,
+    );
+    return () => {
+      active = false;
+      subscription.remove();
+    };
   }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -432,224 +443,287 @@ export default function LoginScreen({ onLoginSuccess }) {
       <AuthBackground theme={t} reducedMotion={reducedMotion} />
       <ScrollView
         style={{ flex: 1, width: "100%" }}
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 28, paddingBottom: insets.bottom + 28 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-      <Animated.View
-        style={[
-          styles.card,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
-        ]}
-      >
-        <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 32 }}>
-          <AnimatedBrand theme={t} reducedMotion={reducedMotion} />
-        </View>
+        <Animated.View
+          style={[
+            styles.card,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 32,
+            }}
+          >
+            <AnimatedBrand theme={t} reducedMotion={reducedMotion} />
+          </View>
 
-        {/* Title */}
-        {renderFormItem(
-          <View>
-            <Text style={[styles.title, { color: t.text }]}>
-              {isSignUp ? "Create your account" : "Welcome back"}
-            </Text>
-            <Text style={[styles.subtitle, { color: t.textMuted }]}>
-              {isSignUp
-                ? "A place for your conversations."
-                : "Sign in to FlowChat."}
-            </Text>
-          </View>,
-          formIndex++,
-        )}
-
-        {/* Error */}
-        {error &&
-          renderFormItem(
-            <View accessibilityLiveRegion="polite" style={[styles.errorBox, { borderColor: t.danger, backgroundColor: t.cardBg }]}>
-              <Text style={[styles.errorText, { color: t.danger }]}>{error}</Text>
+          {/* Title */}
+          {renderFormItem(
+            <View>
+              <Text style={[styles.title, { color: t.text }]}>
+                {isSignUp ? "Create your account" : "Welcome back"}
+              </Text>
+              <Text style={[styles.subtitle, { color: t.textMuted }]}>
+                {isSignUp
+                  ? "A place for your conversations."
+                  : "Sign in to FlowChat."}
+              </Text>
             </View>,
             formIndex++,
           )}
 
-        {/* Google Sign In */}
-        {renderFormItem(
-          <TouchableOpacity
-            style={styles.googleBtn}
-            onPress={handleGoogleButtonPress}
-            disabled={(Platform.OS === "web" && !request) || googleLoading || loading}
-            activeOpacity={0.8}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color={t.text} size="small" />
-            ) : (
-              <>
-                <GoogleIcon />
-                <Text style={[styles.googleBtnText, { color: t.text }]}>
-                  {isSignUp ? "Sign up with Google" : "Sign in with Google"}
+          {/* Error */}
+          {error &&
+            renderFormItem(
+              <View
+                accessibilityLiveRegion="polite"
+                style={[
+                  styles.errorBox,
+                  { borderColor: t.danger, backgroundColor: t.cardBg },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: t.danger }]}>
+                  {error}
                 </Text>
-              </>
+              </View>,
+              formIndex++,
             )}
-          </TouchableOpacity>,
-          formIndex++,
-        )}
 
-        {/* OR Divider */}
-        {renderFormItem(
-          <View style={styles.dividerRow}>
-            <View
-              style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
-            />
-            <Text style={[styles.dividerText, { color: t.textMuted }]}>OR</Text>
-            <View
-              style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
-            />
-          </View>,
-          formIndex++,
-        )}
+          {/* Google Sign In */}
+          {renderFormItem(
+            <TouchableOpacity
+              style={styles.googleBtn}
+              onPress={handleGoogleButtonPress}
+              disabled={
+                (Platform.OS === "web" && !request) || googleLoading || loading
+              }
+              activeOpacity={0.8}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color={t.text} size="small" />
+              ) : (
+                <>
+                  <GoogleIcon />
+                  <Text style={[styles.googleBtnText, { color: t.text }]}>
+                    {isSignUp ? "Sign up with Google" : "Sign in with Google"}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>,
+            formIndex++,
+          )}
 
-        {/* Input fields */}
-        {isSignUp &&
-          renderFormItem(
+          {/* OR Divider */}
+          {renderFormItem(
+            <View style={styles.dividerRow}>
+              <View
+                style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
+              />
+              <Text style={[styles.dividerText, { color: t.textMuted }]}>
+                OR
+              </Text>
+              <View
+                style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
+              />
+            </View>,
+            formIndex++,
+          )}
+
+          {/* Input fields */}
+          {isSignUp &&
+            renderFormItem(
+              <View>
+                <Text style={[styles.label, { color: t.text }]}>Username</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: t.inputBorder,
+                      color: t.text,
+                      backgroundColor: "transparent",
+                    },
+                  ]}
+                  placeholder="Username"
+                  placeholderTextColor={t.textMuted}
+                  value={identifier}
+                  onChangeText={setIdentifier}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>,
+              formIndex++,
+            )}
+
+          {renderFormItem(
             <View>
-              <Text style={[styles.label, { color: t.text }]}>Username</Text>
+              <Text style={[styles.label, { color: t.text }]}>
+                {isSignUp ? "Email" : "Username or Email"}
+              </Text>
               <TextInput
                 style={[
                   styles.input,
                   {
                     borderColor: t.inputBorder,
                     color: t.text,
-                    backgroundColor: t.inputBg,
+                    backgroundColor: "transparent",
                   },
                 ]}
-                placeholder="Choose a username"
+                placeholder={isSignUp ? "Email address" : "Email or username"}
                 placeholderTextColor={t.textMuted}
-                value={identifier}
-                onChangeText={setIdentifier}
+                value={isSignUp ? email : identifier}
+                onChangeText={isSignUp ? setEmail : setIdentifier}
                 autoCapitalize="none"
+                keyboardType={isSignUp ? "email-address" : "default"}
                 autoCorrect={false}
               />
             </View>,
             formIndex++,
           )}
 
-        {renderFormItem(
-          <View>
-            <Text style={[styles.label, { color: t.text }]}>
-              {isSignUp ? "Email" : "Username or Email"}
-            </Text>
-            <TextInput
+          {renderFormItem(
+            <View>
+              <Text style={[styles.label, { color: t.text }]}>Password</Text>
+              <View style={{ position: "relative" }}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    {
+                      borderColor: t.inputBorder,
+                      color: t.text,
+                      backgroundColor: "transparent",
+                      paddingRight: 56,
+                    },
+                  ]}
+                  placeholder="Password"
+                  placeholderTextColor={t.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete={isSignUp ? "new-password" : "current-password"}
+                  accessibilityLabel="Password"
+                  onSubmitEditing={handleSubmit}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((visible) => !visible)}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? "Hide password" : "Show password"
+                  }
+                  style={{
+                    position: "absolute",
+                    right: 4,
+                    top: 1,
+                    width: 44,
+                    height: 44,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z"
+                      stroke={t.textMuted}
+                      strokeWidth="1.7"
+                    />
+                    {showPassword && (
+                      <Path
+                        d="M3 3l18 18"
+                        stroke={t.textMuted}
+                        strokeWidth="1.7"
+                      />
+                    )}
+                  </Svg>
+                </TouchableOpacity>
+              </View>
+            </View>,
+            formIndex++,
+          )}
+
+          {/* Submit */}
+          {renderFormItem(
+            <TouchableOpacity
               style={[
-                styles.input,
+                styles.submitBtn,
                 {
-                  borderColor: t.inputBorder,
-                  color: t.text,
-                  backgroundColor: t.inputBg,
+                  backgroundColor: t.accent,
+                  opacity: loading || googleLoading ? 0.5 : 1,
                 },
               ]}
-              placeholder={
-                isSignUp ? "Enter your email" : "Enter your email or username"
-              }
-              placeholderTextColor={t.textMuted}
-              value={isSignUp ? email : identifier}
-              onChangeText={isSignUp ? setEmail : setIdentifier}
-              autoCapitalize="none"
-              keyboardType={isSignUp ? "email-address" : "default"}
-              autoCorrect={false}
-            />
-          </View>,
-          formIndex++,
-        )}
-
-        {renderFormItem(
-          <View>
-            <Text style={[styles.label, { color: t.text }]}>Password</Text>
-            <View style={{ position: "relative" }}>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  borderColor: t.inputBorder,
-                  color: t.text,
-                  backgroundColor: t.inputBg,
-                  paddingRight: 56,
-                },
-              ]}
-              placeholder="Enter your password"
-              placeholderTextColor={t.textMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete={isSignUp ? "new-password" : "current-password"}
-              accessibilityLabel="Password"
-              onSubmitEditing={handleSubmit}
-            />
-            <TouchableOpacity onPress={() => setShowPassword((visible) => !visible)} accessibilityRole="button" accessibilityLabel={showPassword ? "Hide password" : "Show password"} style={{ position: "absolute", right: 4, top: 1, width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
-              <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <Path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z" stroke={t.textMuted} strokeWidth="1.7" />
-                {showPassword && <Path d="M3 3l18 18" stroke={t.textMuted} strokeWidth="1.7" />}
-              </Svg>
-            </TouchableOpacity>
-            </View>
-          </View>,
-          formIndex++,
-        )}
-
-        {/* Submit */}
-        {renderFormItem(
-          <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              { borderColor: t.accent, opacity: loading || googleLoading ? 0.5 : 1 },
-            ]}
-            onPress={handleSubmit}
-            disabled={loading || googleLoading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={[styles.submitBtnText, { color: t.accent }]}>
+              onPress={handleSubmit}
+              accessibilityRole="button"
+              accessibilityLabel={isSignUp ? "Create account" : "Sign in"}
+              accessibilityState={{
+                disabled: loading || googleLoading,
+                busy: loading,
+              }}
+              disabled={loading || googleLoading}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.submitBtnText, { color: t.bg }]}>
                 {isSignUp ? "Create account" : "Sign in"}
               </Text>
-            )}
-          </TouchableOpacity>,
-          formIndex++,
-        )}
+              <View style={styles.submitBtnIcon}>
+                {loading ? (
+                  <ActivityIndicator color={t.bg} size="small" />
+                ) : (
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <Path
+                      d="M4 12h15m-6-6 6 6-6 6"
+                      stroke={t.bg}
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </Svg>
+                )}
+              </View>
+            </TouchableOpacity>,
+            formIndex++,
+          )}
 
-        {/* Switch mode */}
-        {renderFormItem(
-          <TouchableOpacity
-            onPress={() => {
-              setIsSignUp(!isSignUp);
-              setError(null);
-              setShowPassword(false);
-            }}
-            disabled={loading || googleLoading}
-            style={styles.switchBtn}
-          >
-            <Text style={[styles.switchText, { color: t.textMuted }]}>
-              {isSignUp
-                ? "Already have an account? "
-                : "Don't have an account? "}
-              <Text
-                style={{
-                  color: t.text,
-                  fontWeight: "700",
-                  textDecorationLine: "underline",
-                }}
-              >
-                {isSignUp ? "Sign In" : "Create an Account"}
+          {/* Switch mode */}
+          {renderFormItem(
+            <TouchableOpacity
+              onPress={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+                setShowPassword(false);
+              }}
+              disabled={loading || googleLoading}
+              style={styles.switchBtn}
+            >
+              <Text style={[styles.switchText, { color: t.textMuted }]}>
+                {isSignUp
+                  ? "Already have an account? "
+                  : "Don't have an account? "}
+                <Text
+                  style={{
+                    color: t.text,
+                    fontWeight: "700",
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  {isSignUp ? "Sign In" : "Create an Account"}
+                </Text>
               </Text>
-            </Text>
-          </TouchableOpacity>,
-          formIndex++,
-        )}
-      </Animated.View>
-
+            </TouchableOpacity>,
+            formIndex++,
+          )}
+        </Animated.View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -659,7 +733,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  scrollContent: { flexGrow: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 24 },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
   bottomWaveContainer: {
     position: "absolute",
     bottom: 0,
@@ -795,23 +874,33 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   submitBtn: {
-    borderRadius: 23,
-    minHeight: 46,
-    borderWidth: 1,
-    backgroundColor: "transparent",
-    paddingVertical: 11,
+    alignSelf: "center",
+    width: 180,
+    maxWidth: "100%",
+    minHeight: 48,
+    borderRadius: 28,
+    paddingHorizontal: 20,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0,
-    shadowRadius: 10,
-    elevation: 0,
+    gap: 10,
+    marginTop: 8,
+    overflow: "hidden",
   },
   submitBtnText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
+    flexShrink: 1,
+    alignSelf: "center",
+    textAlign: "center",
+    paddingVertical: 12,
+  },
+  submitBtnIcon: {
+    width: 20,
+    height: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   switchBtn: {
     alignItems: "center",

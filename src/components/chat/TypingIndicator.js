@@ -45,7 +45,10 @@ function Dot({ delay, color }) {
 
   return (
     <Animated.View
-      style={[styles.dot, { backgroundColor: color, opacity, transform: [{ translateY }] }]}
+      style={[
+        styles.dot,
+        { backgroundColor: color, opacity, transform: [{ translateY }] },
+      ]}
     />
   );
 }

@@ -26,14 +26,24 @@ function redactMessage(message, isHidden) {
     result.pinned_by_username = UNAVAILABLE_NAME;
     result.pinned_by_avatar = null;
   }
-  if (message.reply_to) result.reply_to = redactMessage(message.reply_to, isHidden);
+  if (message.reply_to)
+    result.reply_to = redactMessage(message.reply_to, isHidden);
   return result;
 }
 
 function redactUser(person, isHidden) {
   if (!person || !isHidden(person.user_id || person.id)) return person;
-  return { ...person, username: UNAVAILABLE_NAME, display_name: UNAVAILABLE_NAME,
-    name: UNAVAILABLE_NAME, avatar_url: null, avatar: null, status: "offline", last_seen: null, bio: null };
+  return {
+    ...person,
+    username: UNAVAILABLE_NAME,
+    display_name: UNAVAILABLE_NAME,
+    name: UNAVAILABLE_NAME,
+    avatar_url: null,
+    avatar: null,
+    status: "offline",
+    last_seen: null,
+    bio: null,
+  };
 }
 
 module.exports = { blockPolicy, UNAVAILABLE_NAME, redactMessage, redactUser };

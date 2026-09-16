@@ -61,23 +61,28 @@ export default function ContextMenu({
               ]}
             >
               {/* Emoji Quick Reactions Bar */}
-              {!interactionsDisabled && <View
-                style={[styles.emojiBar, { borderBottomColor: t.borderColor }]}
-              >
-                {REACTION_EMOJIS.map((emoji) => (
-                  <TouchableOpacity
-                    key={emoji}
-                    style={styles.emojiBtn}
-                    onPress={() => {
-                      onReact?.(message, emoji);
-                      onClose();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={{ fontSize: 22 }}>{emoji}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>}
+              {!interactionsDisabled && (
+                <View
+                  style={[
+                    styles.emojiBar,
+                    { borderBottomColor: t.borderColor },
+                  ]}
+                >
+                  {REACTION_EMOJIS.map((emoji) => (
+                    <TouchableOpacity
+                      key={emoji}
+                      style={styles.emojiBtn}
+                      onPress={() => {
+                        onReact?.(message, emoji);
+                        onClose();
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
               {/* Preview of selected message */}
               {message.content ? (

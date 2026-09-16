@@ -92,7 +92,12 @@ function SmileIcon({ color }) {
       <Circle cx="12" cy="12" r="9" stroke={color} strokeWidth="1.8" />
       <Circle cx="9" cy="9" r="1" fill={color} />
       <Circle cx="15" cy="9" r="1" fill={color} />
-      <Path d="M8 14a4 4 0 008 0" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <Path
+        d="M8 14a4 4 0 008 0"
+        stroke={color}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
     </Svg>
   );
 }
@@ -235,6 +240,10 @@ export default function MessageInput({
   const [emojiSelection, setEmojiSelection] = useState(undefined);
   const [recording, setRecording] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const replyTargetId = replyingTo?.id || replyingTo?.message_id;
+  useEffect(() => {
+    if (replyTargetId && !disabled && !isRecording) inputRef.current?.focus();
+  }, [replyTargetId, disabled, isRecording]);
   const [recordingSecs, setRecordingSecs] = useState(0);
   const timerRef = useRef(null);
   const webMediaRecorderRef = useRef(null);
@@ -243,11 +252,17 @@ export default function MessageInput({
   const operationRef = useRef({ generation: 0, disabled, mounted: true });
   const permissionRef = useRef(assertInteractionAllowed);
   permissionRef.current = assertInteractionAllowed;
-  if (disabled && !operationRef.current.disabled) operationRef.current.generation += 1;
+  if (disabled && !operationRef.current.disabled)
+    operationRef.current.generation += 1;
   operationRef.current.disabled = disabled;
 
   const operationAllowed = (generation = operationRef.current.generation) => {
-    if (!operationRef.current.mounted || operationRef.current.disabled || generation !== operationRef.current.generation) return false;
+    if (
+      !operationRef.current.mounted ||
+      operationRef.current.disabled ||
+      generation !== operationRef.current.generation
+    )
+      return false;
     try {
       permissionRef.current?.();
       return true;
@@ -270,8 +285,12 @@ export default function MessageInput({
     nativeRecordingRef.current = null;
     if (nativeRecorder) {
       const { Audio } = require("expo-av");
-      try { await nativeRecorder.stopAndUnloadAsync(); } catch {}
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(() => {});
+      try {
+        await nativeRecorder.stopAndUnloadAsync();
+      } catch {}
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false }).catch(
+        () => {},
+      );
     }
   };
 
@@ -382,7 +401,10 @@ export default function MessageInput({
   };
 
   const stopAndSendRecording = async () => {
-    if (!operationAllowed()) { await disposeRecording(); return; }
+    if (!operationAllowed()) {
+      await disposeRecording();
+      return;
+    }
     const generation = operationRef.current.generation;
     const secs = recordingSecs;
     if (Platform.OS === "web") {
@@ -486,7 +508,10 @@ export default function MessageInput({
     const nextValue = value.slice(0, start) + emoji + value.slice(end);
     if (nextValue.length > 4000) return;
     handleChange(nextValue);
-    const nextSelection = { start: start + emoji.length, end: start + emoji.length };
+    const nextSelection = {
+      start: start + emoji.length,
+      end: start + emoji.length,
+    };
     selectionRef.current = nextSelection;
     setEmojiSelection(nextSelection);
     setEmojiPickerVisible(false);
@@ -514,7 +539,12 @@ export default function MessageInput({
         quality: 0.8,
       });
 
-      if (operationAllowed(generation) && !result.canceled && result.assets && result.assets.length > 0) {
+      if (
+        operationAllowed(generation) &&
+        !result.canceled &&
+        result.assets &&
+        result.assets.length > 0
+      ) {
         const asset = result.assets[0];
         const isVideo = asset.type === "video";
         const sizeInBytes = asset.fileSize || asset.size || asset.file?.size;
@@ -546,7 +576,12 @@ export default function MessageInput({
         copyToCacheDirectory: true,
       });
 
-      if (operationAllowed(generation) && !result.canceled && result.assets && result.assets.length > 0) {
+      if (
+        operationAllowed(generation) &&
+        !result.canceled &&
+        result.assets &&
+        result.assets.length > 0
+      ) {
         const asset = result.assets[0];
         const sizeInBytes = asset.size || asset.fileSize || asset.file?.size;
         onSelectAttachment?.({
@@ -769,7 +804,12 @@ export default function MessageInput({
 
       {/* Input row or Voice Recording active row */}
       {isRecording ? (
-        <View style={[styles.inputRow, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
+        <View
+          style={[
+            styles.inputRow,
+            { backgroundColor: t.inputBg, borderColor: t.borderColor },
+          ]}
+        >
           <TouchableOpacity
             onPress={cancelRecording}
             accessibilityRole="button"
@@ -783,12 +823,7 @@ export default function MessageInput({
             </Text>
           </TouchableOpacity>
 
-          <View
-            style={[
-              styles.inputWrap,
-              styles.recordingActiveWrap,
-            ]}
-          >
+          <View style={[styles.inputWrap, styles.recordingActiveWrap]}>
             <BlurView
               intensity={t.isDark ? 45 : 65}
               tint={t.isDark ? "dark" : "light"}
@@ -827,7 +862,12 @@ export default function MessageInput({
           </TouchableOpacity>
         </View>
       ) : (
-        <View style={[styles.inputRow, { backgroundColor: t.inputBg, borderColor: t.borderColor }]}>
+        <View
+          style={[
+            styles.inputRow,
+            { backgroundColor: t.inputBg, borderColor: t.borderColor },
+          ]}
+        >
           <TouchableOpacity
             onPress={() => {
               if (!operationAllowed()) return;

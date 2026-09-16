@@ -25,8 +25,21 @@ function formatTime(ts) {
  * ConversationItem — a single row in the conversation list.
  * Props: conversation, onPress, typingMap, theme, user
  */
-function ConversationItem({ conversation: c, onPress, isTyping, isPinned = false }) {
-  const { theme: t, getPresence, user, isBlockedBy, getBlockPolicy, blockStateReady, blockedByUserIds } = useApp();
+function ConversationItem({
+  conversation: c,
+  onPress,
+  isTyping,
+  isPinned = false,
+}) {
+  const {
+    theme: t,
+    getPresence,
+    user,
+    isBlockedBy,
+    getBlockPolicy,
+    blockStateReady,
+    blockedByUserIds,
+  } = useApp();
   const isGroup = c.type === "group";
   const isSaved =
     c.id === "virtual-saved-messages" ||
@@ -35,9 +48,15 @@ function ConversationItem({ conversation: c, onPress, isTyping, isPinned = false
   const otherUser = c.other_participant;
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   // Mask only when THEY blocked ME — if I blocked them, I still see them normally.
-  const blocked = !isGroup && !isSaved && (!blockStateReady || isBlockedBy(otherUserId));
-  const directDisabled = !isGroup && (!blockStateReady || getBlockPolicy(otherUserId).preventDirectInteraction);
-  const suppressReceipts = !blockStateReady || directDisabled || (isGroup && blockedByUserIds.length > 0);
+  const blocked =
+    !isGroup && !isSaved && (!blockStateReady || isBlockedBy(otherUserId));
+  const directDisabled =
+    !isGroup &&
+    (!blockStateReady || getBlockPolicy(otherUserId).preventDirectInteraction);
+  const suppressReceipts =
+    !blockStateReady ||
+    directDisabled ||
+    (isGroup && blockedByUserIds.length > 0);
   isTyping = blockStateReady && !directDisabled && isTyping;
 
   const presenceStatus = getPresence(otherUserId);
@@ -86,7 +105,16 @@ function ConversationItem({ conversation: c, onPress, isTyping, isPinned = false
 
   return (
     <TouchableOpacity
-      style={[styles.row, { borderBottomColor: t.borderColor }, isPinned && { backgroundColor: t.accent + "10", borderLeftWidth: 3, borderLeftColor: t.accent, paddingLeft: 11 }]}
+      style={[
+        styles.row,
+        { borderBottomColor: t.borderColor },
+        isPinned && {
+          backgroundColor: t.accent + "10",
+          borderLeftWidth: 3,
+          borderLeftColor: t.accent,
+          paddingLeft: 11,
+        },
+      ]}
       onPress={onPress}
       activeOpacity={0.75}
     >
@@ -136,9 +164,18 @@ function ConversationItem({ conversation: c, onPress, isTyping, isPinned = false
           </View>
 
           {isPinned && (
-            <View accessibilityLabel="Pinned chat" style={{ marginRight: hasUnread ? 8 : 0 }}>
+            <View
+              accessibilityLabel="Pinned chat"
+              style={{ marginRight: hasUnread ? 8 : 0 }}
+            >
               <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <Path d="M16 3l5 5-4 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4z" stroke={t.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                <Path
+                  d="M16 3l5 5-4 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4z"
+                  stroke={t.accent}
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </Svg>
             </View>
           )}

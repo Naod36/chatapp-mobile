@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { fileURLToPath } from "node:url";
 
-const artwork = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280">
+const artwork =
+  Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280">
   <g fill="none" stroke="#82949d" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
     <g transform="translate(22 22) rotate(-12 16 16)">
       <path d="M1 13L33 2 23 33 15 21 1 13zM15 21L33 2M15 21l-2 9 6-4"/>
@@ -33,8 +34,13 @@ const artwork = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="280"
 
 for (const scale of [1, 2, 3]) {
   const suffix = scale === 1 ? "" : `@${scale}x`;
-  const destination = fileURLToPath(new URL(`../assets/chat-wallpaper${suffix}.png`, import.meta.url));
-  await sharp(artwork).resize(280 * scale, 280 * scale).png().toFile(destination);
+  const destination = fileURLToPath(
+    new URL(`../assets/chat-wallpaper${suffix}.png`, import.meta.url),
+  );
+  await sharp(artwork)
+    .resize(280 * scale, 280 * scale)
+    .png()
+    .toFile(destination);
   const { channels } = await sharp(destination).stats();
   if (channels[3].max === 0) throw new Error("Wallpaper is blank");
 }

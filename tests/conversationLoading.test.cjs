@@ -5,7 +5,10 @@ const { harness, settle } = require("./helpers.cjs");
 function deferred() {
   let resolve;
   let reject;
-  const promise = new Promise((onResolve, onReject) => { resolve = onResolve; reject = onReject; });
+  const promise = new Promise((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
   return { promise, resolve, reject };
 }
 
@@ -17,23 +20,52 @@ async function conversationFixture() {
   let logoutCount = 0;
   const service = { listConversations: async () => [] };
   const { AppProvider } = runner.load("src/context/AppContext.js", {
-    "react-native": { AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) } },
+    "react-native": {
+      AppState: {
+        currentState: "active",
+        addEventListener: () => ({ remove() {} }),
+      },
+    },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
-    "../services/auth": { authService: { getCurrentUser: async () => null, logout: async () => { logoutCount++; } } },
+    "../services/auth": {
+      authService: {
+        getCurrentUser: async () => null,
+        logout: async () => {
+          logoutCount++;
+        },
+      },
+    },
     "../services/conversations": { conversationService: service },
-    "../services/user": { userService: {
-      getBlockedUsers: async () => outgoing.map((user_id) => ({ user_id })),
-      getBlockedByUsers: async () => incoming,
-      blockUser: async (identity) => { outgoing = [...outgoing, identity]; },
-      unblockUser: async (identity) => { outgoing = outgoing.filter((entry) => entry !== identity); },
-    } },
-    "../services/websocket": { websocketService: {
-      connect() {}, closeAll() {}, subscribe: (handler) => { event = handler; return () => {}; },
-    } },
-    "../services/notifications": { registerForPushNotificationsAsync: async () => null, registerPushToken() {} },
+    "../services/user": {
+      userService: {
+        getBlockedUsers: async () => outgoing.map((user_id) => ({ user_id })),
+        getBlockedByUsers: async () => incoming,
+        blockUser: async (identity) => {
+          outgoing = [...outgoing, identity];
+        },
+        unblockUser: async (identity) => {
+          outgoing = outgoing.filter((entry) => entry !== identity);
+        },
+      },
+    },
+    "../services/websocket": {
+      websocketService: {
+        connect() {},
+        closeAll() {},
+        subscribe: (handler) => {
+          event = handler;
+          return () => {};
+        },
+      },
+    },
+    "../services/notifications": {
+      registerForPushNotificationsAsync: async () => null,
+      registerPushToken() {},
+    },
     "../theme/colors": { THEMES: { light: {} } },
   });
-  const render = () => runner.render(() => AppProvider({ children: null })).props.value;
+  const render = () =>
+    runner.render(() => AppProvider({ children: null })).props.value;
   render();
   await settle();
   render().login({ userId: "me", token: "first-token" });
@@ -46,13 +78,29 @@ async function conversationFixture() {
     requests.push(request);
     return request.promise;
   };
-  return { runner, render, requests, logoutCount: () => logoutCount,
-    changeIncoming: (next) => { incoming = next; event({ event: "block_state_changed" }); } };
+  return {
+    runner,
+    render,
+    requests,
+    logoutCount: () => logoutCount,
+    changeIncoming: (next) => {
+      incoming = next;
+      event({ event: "block_state_changed" });
+    },
+  };
 }
 
-const identity = (name) => [{ conversation_id: "chat", type: "direct", other_participant: {
-  user_id: "peer", display_name: name, avatar_url: name === "Person Not Available" ? null : "/peer.jpg",
-} }];
+const identity = (name) => [
+  {
+    conversation_id: "chat",
+    type: "direct",
+    other_participant: {
+      user_id: "peer",
+      display_name: name,
+      avatar_url: name === "Person Not Available" ? null : "/peer.jpg",
+    },
+  },
+];
 
 test("conversation loads resolved in reverse request order keep the newest result", async () => {
   const fixture = await conversationFixture();
@@ -63,7 +111,10 @@ test("conversation loads resolved in reverse request order keep the newest resul
   fixture.requests[0].resolve(identity("Person Not Available"));
   await older;
   const context = fixture.render();
-  assert.equal(context.conversations[0].other_participant.display_name, "Restored Name");
+  assert.equal(
+    context.conversations[0].other_participant.display_name,
+    "Restored Name",
+  );
   assert.equal(context.conversations[0].id, "chat");
   assert.equal(context.syncState, "ready");
   fixture.runner.unmount();
@@ -79,13 +130,21 @@ test("late pre-unblock redaction cannot replace restored identity, even after un
   await settle();
   fixture.requests[0].resolve(identity("Person Not Available"));
   await older;
-  const poll = [...fixture.runner.timers.values()].find((timer) => timer.delay === 12000);
+  const poll = [...fixture.runner.timers.values()].find(
+    (timer) => timer.delay === 12000,
+  );
   poll.callback();
   await settle();
   const context = fixture.render();
   assert.equal(context.isBlockedBy("peer"), false);
-  assert.equal(context.conversations[0].other_participant.display_name, "Restored Name");
-  assert.equal(context.conversations[0].other_participant.avatar_url, "/peer.jpg");
+  assert.equal(
+    context.conversations[0].other_participant.display_name,
+    "Restored Name",
+  );
+  assert.equal(
+    context.conversations[0].other_participant.avatar_url,
+    "/peer.jpg",
+  );
   assert.equal(fixture.requests.length, 2);
   fixture.runner.unmount();
 });
@@ -100,7 +159,10 @@ test("local block and unblock refreshes reject late conversation responses in re
   await settle();
   fixture.requests[0].resolve(identity("Old Name"));
   await settle();
-  assert.equal(fixture.render().conversations[0].other_participant.display_name, "Current Name");
+  assert.equal(
+    fixture.render().conversations[0].other_participant.display_name,
+    "Current Name",
+  );
   fixture.runner.unmount();
 });
 
@@ -144,8 +206,12 @@ test("login invalidates old conversation results before the new auth effect star
   const latest = fixture.requests.at(-1);
   latest.resolve(identity("New Account"));
   await settle();
-  for (const request of fixture.requests.slice(1, -1)) request.resolve(identity("Stale New Account"));
+  for (const request of fixture.requests.slice(1, -1))
+    request.resolve(identity("Stale New Account"));
   await settle();
-  assert.equal(fixture.render().conversations[0].other_participant.display_name, "New Account");
+  assert.equal(
+    fixture.render().conversations[0].other_participant.display_name,
+    "New Account",
+  );
   fixture.runner.unmount();
 });

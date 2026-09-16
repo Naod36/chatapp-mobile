@@ -30,6 +30,10 @@ import * as ImagePicker from "expo-image-picker";
 import { useApp } from "../context/AppContext";
 import { useConversations } from "../hooks/useConversations";
 import ConversationHeader from "../components/conversations/ConversationHeader";
+import ConversationFolders, {
+  CONVERSATION_FOLDERS,
+  conversationsInFolder,
+} from "../components/conversations/ConversationFolders";
 import ConversationItem from "../components/conversations/ConversationItem";
 import EmptyState from "../components/conversations/EmptyState";
 import Avatar from "../components/common/Avatar";
@@ -198,7 +202,14 @@ function AccountPanel({
   onLogout,
   onProfileUpdated,
 }) {
-  const { unblockUser, isBlockedBy, blockedUserIds, blockStateVersion, blockStateReady, changeTheme } = useApp();
+  const {
+    unblockUser,
+    isBlockedBy,
+    blockedUserIds,
+    blockStateVersion,
+    blockStateReady,
+    changeTheme,
+  } = useApp();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const slideAnim = useRef(new Animated.Value(600)).current;
@@ -264,10 +275,15 @@ function AccountPanel({
   useEffect(() => {
     if (!visible || !showBlockedList) return;
     let cancelled = false;
-    userService.getBlockedUsers().then((list) => {
-      if (!cancelled) setBlockedUsers(list || []);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    userService
+      .getBlockedUsers()
+      .then((list) => {
+        if (!cancelled) setBlockedUsers(list || []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [visible, showBlockedList, blockStateVersion]);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -509,7 +525,9 @@ function AccountPanel({
     setUnblockingUserId(String(userId));
     try {
       await unblockUser(userId);
-      setBlockedUsers((prev) => prev.filter((u) => String(u.user_id) !== String(userId)));
+      setBlockedUsers((prev) =>
+        prev.filter((u) => String(u.user_id) !== String(userId)),
+      );
     } catch (e) {
       Alert.alert("Error", e.message || "Failed to unblock user");
     } finally {
@@ -610,53 +628,79 @@ function AccountPanel({
           >
             {/* Avatar */}
             <View style={styles.avatarRow}>
-              <View style={{ width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <View style={{ width: 44 }} />
-              <TouchableOpacity
-                onPress={handlePickAvatar}
-                disabled={uploadingAvatar}
-                activeOpacity={0.75}
-                style={styles.avatarTouchable}
+              <View
+                style={{
+                  width: "100%",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
               >
-                <Avatar
-                  uri={
-                    profile.avatar_url
-                      ? profile.avatar_url.startsWith("http")
-                        ? profile.avatar_url
-                        : `${API_BASE}${profile.avatar_url}`
-                      : null
-                  }
-                  name={profile.display_name || "?"}
-                  size={64}
-                />
-                {uploadingAvatar ? (
-                  <View
-                    style={[
-                      styles.avatarOverlay,
-                      { backgroundColor: "rgba(0,0,0,0.45)" },
-                    ]}
-                  >
-                    <ActivityIndicator color="#fff" size="small" />
-                  </View>
-                ) : (
-                  <View
-                    style={[
-                      styles.avatarBadge,
-                      { backgroundColor: t.buttonBg, borderColor: t.bg },
-                    ]}
-                  >
-                    <CameraIcon color="#fff" size={13} />
-                  </View>
-                )}
-              </TouchableOpacity>
+                <View style={{ width: 44 }} />
+                <TouchableOpacity
+                  onPress={handlePickAvatar}
+                  disabled={uploadingAvatar}
+                  activeOpacity={0.75}
+                  style={styles.avatarTouchable}
+                >
+                  <Avatar
+                    uri={
+                      profile.avatar_url
+                        ? profile.avatar_url.startsWith("http")
+                          ? profile.avatar_url
+                          : `${API_BASE}${profile.avatar_url}`
+                        : null
+                    }
+                    name={profile.display_name || "?"}
+                    size={64}
+                  />
+                  {uploadingAvatar ? (
+                    <View
+                      style={[
+                        styles.avatarOverlay,
+                        { backgroundColor: "rgba(0,0,0,0.45)" },
+                      ]}
+                    >
+                      <ActivityIndicator color="#fff" size="small" />
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.avatarBadge,
+                        { backgroundColor: t.buttonBg, borderColor: t.bg },
+                      ]}
+                    >
+                      <CameraIcon color="#fff" size={13} />
+                    </View>
+                  )}
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => changeTheme(t.isDark ? "light" : "dark")}
                   accessibilityRole="button"
-                  accessibilityLabel={t.isDark ? "Switch to light theme" : "Switch to dark theme"}
-                  {...(Platform.OS === "web" ? { title: t.isDark ? "Switch to light theme" : "Switch to dark theme" } : {})}
-                  style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: t.accent + "18" }}
+                  accessibilityLabel={
+                    t.isDark ? "Switch to light theme" : "Switch to dark theme"
+                  }
+                  {...(Platform.OS === "web"
+                    ? {
+                        title: t.isDark
+                          ? "Switch to light theme"
+                          : "Switch to dark theme",
+                      }
+                    : {})}
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: t.accent + "18",
+                  }}
                 >
-                  {t.isDark ? <SunIcon color={t.accent} /> : <MoonIcon color={t.accent} />}
+                  {t.isDark ? (
+                    <SunIcon color={t.accent} />
+                  ) : (
+                    <MoonIcon color={t.accent} />
+                  )}
                 </TouchableOpacity>
               </View>
               <Text style={[styles.avatarHint, { color: t.textMuted }]}>
@@ -669,7 +713,11 @@ function AccountPanel({
             ) : (
               <>
                 {/* Error */}
-                {error && <Text style={[styles.errorText, { color: t.danger }]}>{error}</Text>}
+                {error && (
+                  <Text style={[styles.errorText, { color: t.danger }]}>
+                    {error}
+                  </Text>
+                )}
 
                 {/* Profile group */}
                 <Text style={[styles.groupLabel, { color: t.textMuted }]}>
@@ -947,30 +995,36 @@ function AccountPanel({
                           You haven't blocked anyone.
                         </Text>
                       ) : (
-                        blockedUsers.filter((person) => blockedUserIds.includes(String(person.user_id))).map((u) => (
-                          <View key={u.user_id} style={styles.blockedRow}>
-                            <Text
-                              style={{ color: t.text, fontSize: 14, flex: 1 }}
-                              numberOfLines={1}
-                            >
-                              {!blockStateReady || isBlockedBy(u.user_id) ? "Person Not Available" : u.display_name || u.username}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() => handleUnblockUser(u.user_id)}
-                              disabled={!!unblockingUserId}
-                            >
+                        blockedUsers
+                          .filter((person) =>
+                            blockedUserIds.includes(String(person.user_id)),
+                          )
+                          .map((u) => (
+                            <View key={u.user_id} style={styles.blockedRow}>
                               <Text
-                                style={{
-                                  color: t.accent,
-                                  fontSize: 13,
-                                  fontWeight: "700",
-                                }}
+                                style={{ color: t.text, fontSize: 14, flex: 1 }}
+                                numberOfLines={1}
                               >
-                                Unblock
+                                {!blockStateReady || isBlockedBy(u.user_id)
+                                  ? "Person Not Available"
+                                  : u.display_name || u.username}
                               </Text>
-                            </TouchableOpacity>
-                          </View>
-                        ))
+                              <TouchableOpacity
+                                onPress={() => handleUnblockUser(u.user_id)}
+                                disabled={!!unblockingUserId}
+                              >
+                                <Text
+                                  style={{
+                                    color: t.accent,
+                                    fontSize: 13,
+                                    fontWeight: "700",
+                                  }}
+                                >
+                                  Unblock
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))
                       )}
                     </View>
                   )}
@@ -1285,6 +1339,7 @@ export default function ConversationListScreen({ navigation }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [myProfile, setMyProfile] = useState(null);
   const [pinnedConversationIds, setPinnedConversationIds] = useState([]);
+  const [selectedFolderId, setSelectedFolderId] = useState("all");
 
   useEffect(() => {
     userService
@@ -1293,16 +1348,21 @@ export default function ConversationListScreen({ navigation }) {
       .catch(() => {});
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    AsyncStorage.getItem("@flowchat_pinned_conversations")
-      .then((raw) => {
-        const ids = raw ? JSON.parse(raw) : [];
-        if (active) setPinnedConversationIds(Array.isArray(ids) ? ids.map(String) : []);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []));
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      AsyncStorage.getItem("@flowchat_pinned_conversations")
+        .then((raw) => {
+          const ids = raw ? JSON.parse(raw) : [];
+          if (active)
+            setPinnedConversationIds(Array.isArray(ids) ? ids.map(String) : []);
+        })
+        .catch(() => {});
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
 
   const handleSelectConversation = useCallback(
     (conv) => {
@@ -1338,6 +1398,14 @@ export default function ConversationListScreen({ navigation }) {
   }, [loadConversations]);
 
   const showSearch = searchQuery.trim().length > 0;
+  const selectedFolder = CONVERSATION_FOLDERS.find(
+    (folder) => folder.id === selectedFolderId,
+  );
+  const visibleConversations = conversationsInFolder(
+    conversations,
+    selectedFolderId,
+    pinnedConversationIds,
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -1350,6 +1418,14 @@ export default function ConversationListScreen({ navigation }) {
         displayName={myProfile?.display_name}
         onAccountPress={() => setAccountOpen(true)}
       />
+
+      {!showSearch && (
+        <ConversationFolders
+          selectedId={selectedFolderId}
+          onSelect={setSelectedFolderId}
+          theme={t}
+        />
+      )}
 
       {showSearch ? (
         <FlatList
@@ -1390,15 +1466,8 @@ export default function ConversationListScreen({ navigation }) {
         />
       ) : (
         <FlatList
-          data={[...conversations].sort((a, b) => {
-            const aPinned = pinnedConversationIds.includes(
-              String(a.id || a.conversation_id),
-            );
-            const bPinned = pinnedConversationIds.includes(
-              String(b.id || b.conversation_id),
-            );
-            return Number(bPinned) - Number(aPinned);
-          })}
+          key={selectedFolderId}
+          data={visibleConversations}
           extraData={typingMap}
           keyExtractor={(item) => String(item.id || item.conversation_id)}
           renderItem={({ item }) => {
@@ -1413,7 +1482,13 @@ export default function ConversationListScreen({ navigation }) {
             );
           }}
           ListEmptyComponent={
-            syncState === "connecting" ? null : <EmptyState theme={t} />
+            syncState === "connecting" ? null : selectedFolder?.emptyText ? (
+              <Text style={[styles.searchingText, { color: t.textMuted }]}>
+                {selectedFolder.emptyText}
+              </Text>
+            ) : (
+              <EmptyState theme={t} />
+            )
           }
           showsVerticalScrollIndicator={false}
           refreshControl={

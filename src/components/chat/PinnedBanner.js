@@ -71,12 +71,7 @@ export default function PinnedBanner({
             <Text style={[styles.label, { color: t.accent }]}>
               PINNED MESSAGE
             </Text>
-            <Text
-              style={[
-                styles.scopeTag,
-                { color: t.accent },
-              ]}
-            >
+            <Text style={[styles.scopeTag, { color: t.accent }]}>
               {isPersonal ? "• Personal" : "• Shared"}
             </Text>
           </View>

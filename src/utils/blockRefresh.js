@@ -22,7 +22,9 @@ function createBlockRefresh(load, apply, onError = () => {}) {
             clearTimeout(timeout);
           }
         }
-      })().finally(() => { pending = null; });
+      })().finally(() => {
+        pending = null;
+      });
       return pending;
     },
     stop() {

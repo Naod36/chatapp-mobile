@@ -57,8 +57,15 @@ export default function ChatScreen({ route, navigation }) {
     blockStateReady,
     blockStateVersion,
   } = useApp();
-  const conversation = conversations.find((item) => String(item.id || item.conversation_id) ===
-    String(route.params.conversation.id || route.params.conversation.conversation_id)) || route.params.conversation;
+  const conversation =
+    conversations.find(
+      (item) =>
+        String(item.id || item.conversation_id) ===
+        String(
+          route.params.conversation.id ||
+            route.params.conversation.conversation_id,
+        ),
+    ) || route.params.conversation;
   const convId = String(conversation.id || conversation.conversation_id);
   const currentUserId = String(user?.userId || user?.user_id || "");
   const isGroup = conversation.type === "group";
@@ -75,8 +82,10 @@ export default function ChatScreen({ route, navigation }) {
   const otherUserId = String(otherUser?.user_id || otherUser?.id || "");
   const canBlock = !isGroup && !!otherUserId;
   const isUserBlocked = canBlock && isBlocked(otherUserId);
-  const isBlockedByThem = canBlock && (!blockStateReady || isBlockedBy(otherUserId));
-  const directDisabled = !isGroup && (!blockStateReady || isUserBlocked || isBlockedByThem);
+  const isBlockedByThem =
+    canBlock && (!blockStateReady || isBlockedBy(otherUserId));
+  const directDisabled =
+    !isGroup && (!blockStateReady || isUserBlocked || isBlockedByThem);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [isChatPinned, setIsChatPinned] = useState(false);
@@ -166,7 +175,8 @@ export default function ChatScreen({ route, navigation }) {
       return false;
     }
   }, [assertInteractionAllowed]);
-  const showMutationError = (error) => Alert.alert("Action failed", error.message);
+  const showMutationError = (error) =>
+    Alert.alert("Action failed", error.message);
 
   useEffect(() => {
     if (!directDisabled) return;
@@ -264,11 +274,19 @@ export default function ChatScreen({ route, navigation }) {
     setSelectedMsg(null);
   }, []);
 
+  const beginReply = useCallback(
+    (message) => {
+      if (!message || !canInteract()) return;
+      setEditingMessage(null);
+      setReplyingTo(message);
+      closeContextMenu();
+    },
+    [canInteract, closeContextMenu],
+  );
+
   const handleReply = useCallback(() => {
-    if (!canInteract()) return;
-    setReplyingTo(selectedMsg);
-    closeContextMenu();
-  }, [selectedMsg, closeContextMenu]);
+    beginReply(selectedMsg);
+  }, [selectedMsg, beginReply]);
 
   const handleEdit = useCallback(() => {
     if (!canInteract()) return;
@@ -341,88 +359,100 @@ export default function ChatScreen({ route, navigation }) {
     sendControllerRef.current = controller;
     setIsUploading(true);
     try {
-    const text = inputText.trim();
+      const text = inputText.trim();
 
-    if (editingMessage) {
-      if (text) {
-        const msgId = String(editingMessage.id || editingMessage.message_id);
-        editMessage(msgId, text);
-      }
-      setEditingMessage(null);
-      setInputText("");
-      return;
-    }
-
-    if (!text && !attachment) return;
-    const replyId = replyingTo
-      ? String(replyingTo.id || replyingTo.message_id)
-      : null;
-
-    let mediaUrl = null;
-    let msgType = "text";
-    let fileName = null;
-
-    if (attachment) {
-      setIsUploading(true);
-      setUploadProgress({
-        percentage: 0,
-        loadedFormatted: "0 MB",
-        totalFormatted: attachment.sizeFormatted || "file",
-      });
-      try {
-        const formData = new FormData();
-        if (attachment.file) {
-          formData.append("file", attachment.file);
-        } else if (
-          Platform.OS === "web" ||
-          attachment.uri?.startsWith("blob:") ||
-          attachment.uri?.startsWith("data:")
-        ) {
-          const response = await fetch(attachment.uri, { signal: controller.signal });
-          const blob = await response.blob();
-          const fileObj = new File([blob], attachment.name || "upload", {
-            type: attachment.type || blob.type || "application/octet-stream",
-          });
-          formData.append("file", fileObj);
-        } else {
-          formData.append("file", {
-            uri: attachment.uri,
-            name: attachment.name || "upload",
-            type: attachment.type || "application/octet-stream",
-          });
+      if (editingMessage) {
+        if (text) {
+          const msgId = String(editingMessage.id || editingMessage.message_id);
+          editMessage(msgId, text);
         }
-
-        assertInteractionAllowed();
-        if (controller.signal.aborted) throw new Error("Send cancelled.");
-        const res = await conversationService.uploadFile(
-          formData,
-          (progress) => {
-            setUploadProgress(progress);
-          },
-          controller.signal,
-        );
-        mediaUrl = res?.url || res?.file_url || res?.media_url;
-        if (!mediaUrl) throw new Error("Upload did not return a file URL.");
-        fileName = attachment.name;
-        msgType = attachment.mediaType;
-      } catch (err) {
-        Alert.alert("Upload Error", err.message || "Failed to upload file");
-        setIsUploading(false);
-        setUploadProgress(null);
+        setEditingMessage(null);
+        setInputText("");
         return;
       }
-      setIsUploading(false);
-      setUploadProgress(null);
-    }
 
-    assertInteractionAllowed();
-    if (controller.signal.aborted) throw new Error("Send cancelled.");
-    await sendMessage(text, replyId, msgType, mediaUrl, fileName, controller.signal);
-    setInputText("");
-    setAttachment(null);
-    setReplyingTo(null);
+      if (!text && !attachment) return;
+      const replyId = replyingTo
+        ? String(replyingTo.id || replyingTo.message_id)
+        : null;
+
+      let mediaUrl = null;
+      let msgType = "text";
+      let fileName = null;
+
+      if (attachment) {
+        setIsUploading(true);
+        setUploadProgress({
+          percentage: 0,
+          loadedFormatted: "0 MB",
+          totalFormatted: attachment.sizeFormatted || "file",
+        });
+        try {
+          const formData = new FormData();
+          if (attachment.file) {
+            formData.append("file", attachment.file);
+          } else if (
+            Platform.OS === "web" ||
+            attachment.uri?.startsWith("blob:") ||
+            attachment.uri?.startsWith("data:")
+          ) {
+            const response = await fetch(attachment.uri, {
+              signal: controller.signal,
+            });
+            const blob = await response.blob();
+            const fileObj = new File([blob], attachment.name || "upload", {
+              type: attachment.type || blob.type || "application/octet-stream",
+            });
+            formData.append("file", fileObj);
+          } else {
+            formData.append("file", {
+              uri: attachment.uri,
+              name: attachment.name || "upload",
+              type: attachment.type || "application/octet-stream",
+            });
+          }
+
+          assertInteractionAllowed();
+          if (controller.signal.aborted) throw new Error("Send cancelled.");
+          const res = await conversationService.uploadFile(
+            formData,
+            (progress) => {
+              setUploadProgress(progress);
+            },
+            controller.signal,
+          );
+          mediaUrl = res?.url || res?.file_url || res?.media_url;
+          if (!mediaUrl) throw new Error("Upload did not return a file URL.");
+          fileName = attachment.name;
+          msgType = attachment.mediaType;
+        } catch (err) {
+          Alert.alert("Upload Error", err.message || "Failed to upload file");
+          setIsUploading(false);
+          setUploadProgress(null);
+          return;
+        }
+        setIsUploading(false);
+        setUploadProgress(null);
+      }
+
+      assertInteractionAllowed();
+      if (controller.signal.aborted) throw new Error("Send cancelled.");
+      await sendMessage(
+        text,
+        replyId,
+        msgType,
+        mediaUrl,
+        fileName,
+        controller.signal,
+      );
+      setInputText("");
+      setAttachment(null);
+      setReplyingTo(null);
     } catch (error) {
-      Alert.alert("Message not sent", error.message || "The server rejected this message.");
+      Alert.alert(
+        "Message not sent",
+        error.message || "The server rejected this message.",
+      );
     } finally {
       sendControllerRef.current = null;
       setIsUploading(false);
@@ -453,7 +483,12 @@ export default function ChatScreen({ route, navigation }) {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   const isTypingActive = !directDisabled && blockStateReady ? typingUser : null;
-  const messagesById = new Map(messages.map((message) => [String(message.id || message.message_id), message]));
+  const messagesById = new Map(
+    messages.map((message) => [
+      String(message.id || message.message_id),
+      message,
+    ]),
+  );
   const selectedMsgIsPinned = selectedMsg
     ? pinnedMessages.some(
         (p) =>
@@ -472,7 +507,10 @@ export default function ChatScreen({ route, navigation }) {
         resizeMode="repeat"
         pointerEvents="none"
         accessible={false}
-        style={[StyleSheet.absoluteFill, { opacity: t.isDark ? 0.14 : 0.2 }]}
+        style={[
+          StyleSheet.absoluteFill,
+          { width: "100%", height: "100%", opacity: t.isDark ? 0.14 : 0.2 },
+        ]}
       />
       <ChatHeader
         onSearchPress={() => setMessageSearchOpen((open) => !open)}
@@ -530,8 +568,13 @@ export default function ChatScreen({ route, navigation }) {
         theme={t}
         onCycle={handleCyclePinned}
         onOpenList={() => setPinnedListVisible(true)}
-        onUnpinActive={directDisabled ? undefined : (msg) =>
-          unpinMessage(msg.message_id || msg.id, msg.scope).catch(showMutationError)
+        onUnpinActive={
+          directDisabled
+            ? undefined
+            : (msg) =>
+                unpinMessage(msg.message_id || msg.id, msg.scope).catch(
+                  showMutationError,
+                )
         }
       />
 
@@ -558,6 +601,7 @@ export default function ChatScreen({ route, navigation }) {
               userProfile={user}
               onToggleReaction={handleToggleReaction}
               onLongPress={openContextMenu}
+              onSwipeReply={beginReply}
               suppressReceipts={suppressReceipts}
               interactionsDisabled={directDisabled}
             />
@@ -645,8 +689,13 @@ export default function ChatScreen({ route, navigation }) {
         pinnedMessages={pinnedMessages}
         theme={t}
         onSelectMessage={(msg) => scrollToMessageId(msg.message_id || msg.id)}
-        onUnpinMessage={directDisabled ? undefined : (msg) =>
-          unpinMessage(msg.message_id || msg.id, msg.scope).catch(showMutationError)
+        onUnpinMessage={
+          directDisabled
+            ? undefined
+            : (msg) =>
+                unpinMessage(msg.message_id || msg.id, msg.scope).catch(
+                  showMutationError,
+                )
         }
         onClose={() => setPinnedListVisible(false)}
       />

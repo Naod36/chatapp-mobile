@@ -57,8 +57,14 @@ export function useConversations() {
   const startConversation = useCallback(
     async (targetUser) => {
       try {
-        if (!blockStateReady || getBlockPolicy(targetUser.user_id || targetUser.id).preventDirectInteraction) {
-          throw new Error("Direct messaging is unavailable for this conversation.");
+        if (
+          !blockStateReady ||
+          getBlockPolicy(targetUser.user_id || targetUser.id)
+            .preventDirectInteraction
+        ) {
+          throw new Error(
+            "Direct messaging is unavailable for this conversation.",
+          );
         }
         const result = await conversationService.createConversation(
           targetUser.user_id || targetUser.id,
@@ -97,7 +103,12 @@ export function useConversations() {
     loadConversations,
     searchQuery,
     setSearchQuery,
-    searchResults: searchResults.map((person) => redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity))),
+    searchResults: searchResults.map((person) =>
+      redactUser(
+        person,
+        (identity) => !blockStateReady || isBlockedBy(identity),
+      ),
+    ),
     isSearching,
     startConversation,
     typingMap,

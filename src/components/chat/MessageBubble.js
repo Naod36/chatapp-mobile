@@ -3,6 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import MessageStatusIcon from "../common/MessageStatusIcon";
 import VoicePlayer from "./VoicePlayer";
+import SwipeToReply from "./SwipeToReply";
 import { API_BASE } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import { redactMessage } from "../../utils/blockPolicy";
@@ -99,14 +100,19 @@ function MessageBubble({
   userProfile,
   onToggleReaction,
   onLongPress,
+  onSwipeReply,
   repliedMessage,
   onReplyPress,
   suppressReceipts = false,
   interactionsDisabled = false,
 }) {
   const { isBlockedBy, blockStateReady } = useApp();
-  const hiddenSender = !blockStateReady || isBlockedBy(msg.sender_id || msg.user_id);
-  msg = redactMessage(msg, (identity) => !blockStateReady || isBlockedBy(identity));
+  const hiddenSender =
+    !blockStateReady || isBlockedBy(msg.sender_id || msg.user_id);
+  msg = redactMessage(
+    msg,
+    (identity) => !blockStateReady || isBlockedBy(identity),
+  );
   const isImage = msg.message_type === "image";
   const isVoice = msg.message_type === "voice" || msg.message_type === "audio";
   const isFile = msg.message_type === "file";
@@ -116,282 +122,330 @@ function MessageBubble({
   const textColor = isOwn ? t.userBubbleText : t.otherBubbleText;
   const original = msg.reply_to || repliedMessage;
   const replySenderId = String(original?.sender_id || original?.user_id || "");
-  const replyHidden = original && (!blockStateReady || isBlockedBy(replySenderId));
-  const replyParticipant = (participants || []).find((person) => String(person.user_id || person.id) === replySenderId)
-    || (String(otherParticipant?.user_id || otherParticipant?.id) === replySenderId ? otherParticipant : null);
-  const replyName = !original ? "Reply" : replyHidden ? "Person Not Available"
-    : replySenderId === String(currentUserId) ? "You"
-    : original.sender_name || replyParticipant?.display_name || replyParticipant?.username || "Reply";
-  const replyContent = !original ? "Original message unavailable"
-    : original.content || ({ image: "Photo", video: "Video", voice: "Voice message", audio: "Voice message", file: "File" }[original.message_type] || "Message");
+  const replyHidden =
+    original && (!blockStateReady || isBlockedBy(replySenderId));
+  const replyParticipant =
+    (participants || []).find(
+      (person) => String(person.user_id || person.id) === replySenderId,
+    ) ||
+    (String(otherParticipant?.user_id || otherParticipant?.id) === replySenderId
+      ? otherParticipant
+      : null);
+  const replyName = !original
+    ? "Reply"
+    : replyHidden
+      ? "Person Not Available"
+      : replySenderId === String(currentUserId)
+        ? "You"
+        : original.sender_name ||
+          replyParticipant?.display_name ||
+          replyParticipant?.username ||
+          "Reply";
+  const replyContent = !original
+    ? "Original message unavailable"
+    : original.content ||
+      {
+        image: "Photo",
+        video: "Video",
+        voice: "Voice message",
+        audio: "Voice message",
+        file: "File",
+      }[original.message_type] ||
+      "Message";
   const replyId = msg.reply_to_id || original?.id || original?.message_id;
 
   return (
-    <TouchableOpacity
-      style={[styles.row, isOwn ? styles.rowRight : styles.rowLeft]}
-      onLongPress={() => onLongPress(msg)}
-      activeOpacity={0.85}
-      delayLongPress={300}
+    <SwipeToReply
+      enabled={
+        !interactionsDisabled &&
+        !!onSwipeReply &&
+        !!(msg.id || msg.message_id) &&
+        msg.status !== "failed" &&
+        msg.status !== "sending" &&
+        msg.status !== "pending"
+      }
+      onReply={() => onSwipeReply(msg)}
+      color={t.accent}
     >
-      {/* Group received avatar */}
-      {!isOwn && isGroup && (
-        <View
-          style={[
-            styles.groupAvatar,
-            { backgroundColor: hiddenSender ? t.textMuted : senderColor(msg.sender_id || msg.user_id) },
-          ]}
-        >
-          <Text style={styles.groupAvatarText}>
-            {hiddenSender ? "?" : (msg.sender_name || "?")[0].toUpperCase()}
-          </Text>
-        </View>
-      )}
-
-      <View
-        style={[
-          styles.bubbleWrap,
-          { alignItems: isOwn ? "flex-end" : "flex-start" },
-        ]}
+      <TouchableOpacity
+        style={[styles.row, isOwn ? styles.rowRight : styles.rowLeft]}
+        onLongPress={() => onLongPress(msg)}
+        activeOpacity={0.85}
+        delayLongPress={300}
       >
-        {/* Bubble */}
-        <View
-          style={[
-            styles.bubble,
-            {
-              backgroundColor: bubbleBg,
-              borderTopLeftRadius: 18,
-              borderTopRightRadius: 18,
-              borderBottomRightRadius: isOwn ? 4 : 18,
-              borderBottomLeftRadius: isOwn ? 18 : 4,
-            },
-          ]}
-        >
-          {/* Group sender name */}
-          {isGroup && !isOwn && msg.sender_name && (
-            <Text
-              style={[
-                styles.senderName,
-                { color: hiddenSender ? t.textMuted : t.accent },
-              ]}
-            >
-              {msg.sender_name}
-            </Text>
-          )}
-
-          {/* Reply preview */}
-          {(msg.reply_to_id || original) && (
-            <TouchableOpacity
-              onPress={() => onReplyPress?.(replyId)}
-              disabled={!original || !onReplyPress}
-              accessibilityRole="button"
-              accessibilityLabel={`Reply to ${replyName}: ${replyContent}`}
-              style={[
-                styles.replyPreview,
-                {
-                  borderLeftColor: isOwn ? textColor : t.accent,
-                  backgroundColor: isOwn
-                    ? "rgba(0,0,0,0.12)"
-                    : "rgba(0,0,0,0.05)",
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.replyName,
-                  { color: isOwn ? textColor : t.accent },
-                ]}
-                numberOfLines={1}
-              >
-                {replyName}
-              </Text>
-              <Text
-                style={[
-                  styles.replyContent,
-                  { color: isOwn ? textColor : t.textMuted },
-                ]}
-                numberOfLines={1}
-              >
-                {replyContent}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Image */}
-          {isImage && (msg.media_url || msg.file_url) && (
-            <Image
-              source={{ uri: getAssetUrl(msg.media_url || msg.file_url) }}
-              style={styles.imageAttachment}
-              resizeMode="cover"
-            />
-          )}
-
-          {/* Voice */}
-          {isVoice && (msg.media_url || msg.file_url) && (
-            <VoicePlayer
-              src={getAssetUrl(msg.media_url || msg.file_url)}
-              isOwn={isOwn}
-              theme={t}
-            />
-          )}
-
-          {/* File */}
-          {isFile && (
-            <View style={styles.mediaRow}>
-              <FileIcon color={textColor} />
-              <Text
-                style={[styles.mediaLabel, { color: textColor }]}
-                numberOfLines={1}
-              >
-                {msg.file_name || "File"}
-              </Text>
-            </View>
-          )}
-
-          {/* Video */}
-          {isVideo && (
-            <View style={styles.mediaRow}>
-              <VideoIcon color={textColor} />
-              <Text style={[styles.mediaLabel, { color: textColor }]}>
-                Video
-              </Text>
-            </View>
-          )}
-
-          {/* Text */}
-          {!!msg.content && (
-            <Text style={[styles.msgText, { color: textColor }]}>
-              {msg.content}
-            </Text>
-          )}
-        </View>
-
-        {/* Reaction Pills */}
-        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+        {/* Group received avatar */}
+        {!isOwn && isGroup && (
           <View
             style={[
-              styles.reactionsRow,
-              { justifyContent: isOwn ? "flex-end" : "flex-start" },
+              styles.groupAvatar,
+              {
+                backgroundColor: hiddenSender
+                  ? t.textMuted
+                  : senderColor(msg.sender_id || msg.user_id),
+              },
             ]}
           >
-            {Object.entries(msg.reactions).map(([emoji, uids]) => {
-              const hasReacted =
-                Array.isArray(uids) && uids.includes(currentUserId);
-
-              const reactUsers = uids.map((uid) => {
-                const normUid = String(typeof uid === "object" ? uid.user_id || uid.id : uid);
-                if (!blockStateReady || isBlockedBy(normUid)) return { avatar: null, initial: "?" };
-                if (normUid === currentUserId) {
-                  return {
-                    avatar: userProfile?.avatar_url,
-                    initial: (userProfile?.username || "U")[0].toUpperCase(),
-                  };
-                }
-                if (String(msg.sender_id || msg.user_id) === normUid) {
-                  return {
-                    avatar: msg.sender_avatar,
-                    initial: (msg.sender_name || "?")[0].toUpperCase(),
-                  };
-                }
-                const part = (participants || []).find(
-                  (p) => String(p.user_id || p.id) === normUid,
-                );
-                if (part) {
-                  return {
-                    avatar: part.avatar_url,
-                    initial: (part.display_name ||
-                      part.username ||
-                      "?")[0].toUpperCase(),
-                  };
-                }
-                if (
-                  otherParticipant &&
-                  String(otherParticipant.user_id || otherParticipant.id) ===
-                    normUid
-                ) {
-                  return {
-                    avatar: otherParticipant.avatar_url,
-                    initial: (otherParticipant.display_name ||
-                      otherParticipant.username ||
-                      "?")[0].toUpperCase(),
-                  };
-                }
-                return { avatar: null, initial: "?" };
-              });
-
-              const shownUsers = reactUsers.slice(0, 3);
-
-              return (
-                <TouchableOpacity
-                  key={emoji}
-                  disabled={interactionsDisabled}
-                  onPress={() => onToggleReaction?.(msg, emoji)}
-                  style={[
-                    styles.reactionPill,
-                    {
-                      backgroundColor: t.cardBg,
-                      borderColor: hasReacted ? t.accent : t.borderColor,
-                    },
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.avatarStack}>
-                    {shownUsers.map((u, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.rxAvatar,
-                          {
-                            marginLeft: idx === 0 ? 0 : -6,
-                            zIndex: shownUsers.length - idx,
-                            backgroundColor: u.avatar
-                              ? "transparent"
-                              : t.buttonBg,
-                            borderColor: t.cardBg,
-                          },
-                        ]}
-                      >
-                        {u.avatar ? (
-                          <Image
-                            source={{ uri: getAssetUrl(u.avatar) }}
-                            style={styles.rxAvatarImg}
-                          />
-                        ) : (
-                          <Text style={styles.rxAvatarText}>{u.initial}</Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                  <Text style={styles.reactionEmoji}>{emoji}</Text>
-                  {uids.length > 1 && (
-                    <Text
-                      style={[
-                        styles.reactionCount,
-                        { color: hasReacted ? t.accent : t.textMuted },
-                      ]}
-                    >
-                      {uids.length}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+            <Text style={styles.groupAvatarText}>
+              {hiddenSender ? "?" : (msg.sender_name || "?")[0].toUpperCase()}
+            </Text>
           </View>
         )}
 
-        {/* Footer: time + tick */}
-        <View style={styles.footer}>
-          <Text style={[styles.time, { color: t.textMuted }]}>
-            {formatTime(msg.created_at || msg.timestamp)}{" "}
-            {msg.is_edited ? "(edited)" : ""}
-          </Text>
-          {msg.status === "failed" ? <Text style={{ color: t.textMuted }}>Not sent</Text> : !suppressReceipts && <MessageStatusIcon
-            status={msg.status}
-            isOwn={isOwn}
-            isDark={t.isDark}
-          />}
+        <View
+          style={[
+            styles.bubbleWrap,
+            { alignItems: isOwn ? "flex-end" : "flex-start" },
+          ]}
+        >
+          {/* Bubble */}
+          <View
+            style={[
+              styles.bubble,
+              {
+                backgroundColor: bubbleBg,
+                borderTopLeftRadius: 18,
+                borderTopRightRadius: 18,
+                borderBottomRightRadius: isOwn ? 4 : 18,
+                borderBottomLeftRadius: isOwn ? 18 : 4,
+              },
+            ]}
+          >
+            {/* Group sender name */}
+            {isGroup && !isOwn && msg.sender_name && (
+              <Text
+                style={[
+                  styles.senderName,
+                  { color: hiddenSender ? t.textMuted : t.accent },
+                ]}
+              >
+                {msg.sender_name}
+              </Text>
+            )}
+
+            {/* Reply preview */}
+            {(msg.reply_to_id || original) && (
+              <TouchableOpacity
+                onPress={() => onReplyPress?.(replyId)}
+                disabled={!original || !onReplyPress}
+                accessibilityRole="button"
+                accessibilityLabel={`Reply to ${replyName}: ${replyContent}`}
+                style={[
+                  styles.replyPreview,
+                  {
+                    borderLeftColor: isOwn ? textColor : t.accent,
+                    backgroundColor: isOwn
+                      ? "rgba(0,0,0,0.12)"
+                      : "rgba(0,0,0,0.05)",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.replyName,
+                    { color: isOwn ? textColor : t.accent },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {replyName}
+                </Text>
+                <Text
+                  style={[
+                    styles.replyContent,
+                    { color: isOwn ? textColor : t.textMuted },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {replyContent}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Image */}
+            {isImage && (msg.media_url || msg.file_url) && (
+              <Image
+                source={{ uri: getAssetUrl(msg.media_url || msg.file_url) }}
+                style={styles.imageAttachment}
+                resizeMode="cover"
+              />
+            )}
+
+            {/* Voice */}
+            {isVoice && (msg.media_url || msg.file_url) && (
+              <VoicePlayer
+                src={getAssetUrl(msg.media_url || msg.file_url)}
+                isOwn={isOwn}
+                theme={t}
+              />
+            )}
+
+            {/* File */}
+            {isFile && (
+              <View style={styles.mediaRow}>
+                <FileIcon color={textColor} />
+                <Text
+                  style={[styles.mediaLabel, { color: textColor }]}
+                  numberOfLines={1}
+                >
+                  {msg.file_name || "File"}
+                </Text>
+              </View>
+            )}
+
+            {/* Video */}
+            {isVideo && (
+              <View style={styles.mediaRow}>
+                <VideoIcon color={textColor} />
+                <Text style={[styles.mediaLabel, { color: textColor }]}>
+                  Video
+                </Text>
+              </View>
+            )}
+
+            {/* Text */}
+            {!!msg.content && (
+              <Text style={[styles.msgText, { color: textColor }]}>
+                {msg.content}
+              </Text>
+            )}
+          </View>
+
+          {/* Reaction Pills */}
+          {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+            <View
+              style={[
+                styles.reactionsRow,
+                { justifyContent: isOwn ? "flex-end" : "flex-start" },
+              ]}
+            >
+              {Object.entries(msg.reactions).map(([emoji, uids]) => {
+                const hasReacted =
+                  Array.isArray(uids) && uids.includes(currentUserId);
+
+                const reactUsers = uids.map((uid) => {
+                  const normUid = String(
+                    typeof uid === "object" ? uid.user_id || uid.id : uid,
+                  );
+                  if (!blockStateReady || isBlockedBy(normUid))
+                    return { avatar: null, initial: "?" };
+                  if (normUid === currentUserId) {
+                    return {
+                      avatar: userProfile?.avatar_url,
+                      initial: (userProfile?.username || "U")[0].toUpperCase(),
+                    };
+                  }
+                  if (String(msg.sender_id || msg.user_id) === normUid) {
+                    return {
+                      avatar: msg.sender_avatar,
+                      initial: (msg.sender_name || "?")[0].toUpperCase(),
+                    };
+                  }
+                  const part = (participants || []).find(
+                    (p) => String(p.user_id || p.id) === normUid,
+                  );
+                  if (part) {
+                    return {
+                      avatar: part.avatar_url,
+                      initial: (part.display_name ||
+                        part.username ||
+                        "?")[0].toUpperCase(),
+                    };
+                  }
+                  if (
+                    otherParticipant &&
+                    String(otherParticipant.user_id || otherParticipant.id) ===
+                      normUid
+                  ) {
+                    return {
+                      avatar: otherParticipant.avatar_url,
+                      initial: (otherParticipant.display_name ||
+                        otherParticipant.username ||
+                        "?")[0].toUpperCase(),
+                    };
+                  }
+                  return { avatar: null, initial: "?" };
+                });
+
+                const shownUsers = reactUsers.slice(0, 3);
+
+                return (
+                  <TouchableOpacity
+                    key={emoji}
+                    disabled={interactionsDisabled}
+                    onPress={() => onToggleReaction?.(msg, emoji)}
+                    style={[
+                      styles.reactionPill,
+                      {
+                        backgroundColor: t.cardBg,
+                        borderColor: hasReacted ? t.accent : t.borderColor,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.avatarStack}>
+                      {shownUsers.map((u, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.rxAvatar,
+                            {
+                              marginLeft: idx === 0 ? 0 : -6,
+                              zIndex: shownUsers.length - idx,
+                              backgroundColor: u.avatar
+                                ? "transparent"
+                                : t.buttonBg,
+                              borderColor: t.cardBg,
+                            },
+                          ]}
+                        >
+                          {u.avatar ? (
+                            <Image
+                              source={{ uri: getAssetUrl(u.avatar) }}
+                              style={styles.rxAvatarImg}
+                            />
+                          ) : (
+                            <Text style={styles.rxAvatarText}>{u.initial}</Text>
+                          )}
+                        </View>
+                      ))}
+                    </View>
+                    <Text style={styles.reactionEmoji}>{emoji}</Text>
+                    {uids.length > 1 && (
+                      <Text
+                        style={[
+                          styles.reactionCount,
+                          { color: hasReacted ? t.accent : t.textMuted },
+                        ]}
+                      >
+                        {uids.length}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Footer: time + tick */}
+          <View style={styles.footer}>
+            <Text style={[styles.time, { color: t.textMuted }]}>
+              {formatTime(msg.created_at || msg.timestamp)}{" "}
+              {msg.is_edited ? "(edited)" : ""}
+            </Text>
+            {msg.status === "failed" ? (
+              <Text style={{ color: t.textMuted }}>Not sent</Text>
+            ) : (
+              !suppressReceipts && (
+                <MessageStatusIcon
+                  status={msg.status}
+                  isOwn={isOwn}
+                  isDark={t.isDark}
+                />
+              )
+            )}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </SwipeToReply>
   );
 }
 

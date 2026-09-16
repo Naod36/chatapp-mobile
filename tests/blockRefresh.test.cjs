@@ -5,7 +5,10 @@ const { createBlockRefresh } = require("../src/utils/blockRefresh");
 test("overlapping event/poll refreshes skip stale results and coalesce", async () => {
   const requests = [];
   const applied = [];
-  const sync = createBlockRefresh(() => new Promise((resolve) => requests.push(resolve)), (value) => applied.push(value));
+  const sync = createBlockRefresh(
+    () => new Promise((resolve) => requests.push(resolve)),
+    (value) => applied.push(value),
+  );
   const pending = sync.refresh();
   sync.refresh();
   sync.refresh();
@@ -23,10 +26,15 @@ test("logout discards an in-flight result and aborts its request", async () => {
   let resolveRequest;
   let requestSignal;
   const applied = [];
-  const sync = createBlockRefresh((signal) => {
-    requestSignal = signal;
-    return new Promise((resolve) => { resolveRequest = resolve; });
-  }, (value) => applied.push(value));
+  const sync = createBlockRefresh(
+    (signal) => {
+      requestSignal = signal;
+      return new Promise((resolve) => {
+        resolveRequest = resolve;
+      });
+    },
+    (value) => applied.push(value),
+  );
   const pending = sync.refresh();
   sync.stop();
   resolveRequest("old account");

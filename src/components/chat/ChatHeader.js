@@ -130,12 +130,29 @@ export default function ChatHeader({
           onPress={onSearchPress}
           accessibilityRole="button"
           accessibilityLabel="Search messages"
-          style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+          style={{
+            width: 40,
+            height: 40,
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
           {...(Platform.OS === "web" ? { title: "Search messages" } : {})}
         >
           <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <Circle cx="10.5" cy="10.5" r="6.5" stroke={t.textMuted} strokeWidth="2" />
-            <Path d="M16 16l5 5" stroke={t.textMuted} strokeWidth="2" strokeLinecap="round" />
+            <Circle
+              cx="10.5"
+              cy="10.5"
+              r="6.5"
+              stroke={t.textMuted}
+              strokeWidth="2"
+            />
+            <Path
+              d="M16 16l5 5"
+              stroke={t.textMuted}
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
           </Svg>
         </TouchableOpacity>
       )}

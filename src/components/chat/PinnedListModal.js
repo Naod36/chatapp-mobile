@@ -103,12 +103,7 @@ export default function PinnedListModal({
                         },
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.scopeText,
-                          { color: t.accent },
-                        ]}
-                      >
+                      <Text style={[styles.scopeText, { color: t.accent }]}>
                         {isPersonal ? "Personal" : "Shared"}
                       </Text>
                     </View>

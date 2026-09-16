@@ -58,8 +58,15 @@ function CheckIcon({ color }) {
 }
 
 export default function NewGroupScreen({ navigation }) {
-  const { theme: t, setConversations, isBlockedBy, blockStateReady, blockStateVersion } = useApp();
-  const visibleUser = (person) => redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity));
+  const {
+    theme: t,
+    setConversations,
+    isBlockedBy,
+    blockStateReady,
+    blockStateVersion,
+  } = useApp();
+  const visibleUser = (person) =>
+    redactUser(person, (identity) => !blockStateReady || isBlockedBy(identity));
   const insets = useSafeAreaInsets();
   const [groupName, setGroupName] = useState("");
   const [query, setQuery] = useState("");
