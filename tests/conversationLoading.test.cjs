@@ -25,6 +25,10 @@ async function conversationFixture() {
         currentState: "active",
         addEventListener: () => ({ remove() {} }),
       },
+      Appearance: {
+        getColorScheme: () => "light",
+        addChangeListener: () => ({ remove() {} }),
+      },
     },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
     "../services/auth": {

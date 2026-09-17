@@ -17,6 +17,10 @@ import Svg, { Path, Line, Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import EmojiPicker from "rn-emoji-keyboard";
+import {
+  UPLOAD_SIZE_ERROR,
+  isOversizedUpload,
+} from "../../utils/uploadLimits.js";
 
 function ImageIcon({ color, size = 20 }) {
   return (
@@ -204,9 +208,11 @@ export default function MessageInput({
   onCancelEdit,
   attachment,
   onSelectAttachment,
+  onSelectMultipleImages,
   onClearAttachment,
   isUploading,
   uploadProgress,
+  batchProgress,
   disabled = false,
   assertInteractionAllowed,
 }) {
@@ -537,6 +543,8 @@ export default function MessageInput({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images", "videos"],
         quality: 0.8,
+        allowsMultipleSelection: true,
+        selectionLimit: 10,
       });
 
       if (
@@ -545,21 +553,59 @@ export default function MessageInput({
         result.assets &&
         result.assets.length > 0
       ) {
-        const asset = result.assets[0];
-        const isVideo = asset.type === "video";
-        const sizeInBytes = asset.fileSize || asset.size || asset.file?.size;
-        onSelectAttachment?.({
-          uri: asset.uri,
-          name:
-            asset.fileName ||
-            asset.name ||
-            (isVideo ? `video_${Date.now()}.mp4` : `photo_${Date.now()}.jpg`),
-          type: asset.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
-          mediaType: isVideo ? "video" : "image",
-          file: asset.file,
-          size: sizeInBytes,
-          sizeFormatted: formatFileSize(sizeInBytes),
-        });
+        const toEntry = (asset) => {
+          const isVideo = asset.type === "video";
+          const sizeInBytes = asset.fileSize || asset.size || asset.file?.size;
+          return {
+            uri: asset.uri,
+            name:
+              asset.fileName ||
+              asset.name ||
+              (isVideo ? `video_${Date.now()}.mp4` : `photo_${Date.now()}.jpg`),
+            type: asset.mimeType || (isVideo ? "video/mp4" : "image/jpeg"),
+            mediaType: isVideo ? "video" : "image",
+            file: asset.file,
+            size: sizeInBytes,
+            sizeFormatted: formatFileSize(sizeInBytes),
+          };
+        };
+
+        if (result.assets.length > 1) {
+          const images = result.assets
+            .filter((asset) => asset.type !== "video")
+            .map(toEntry);
+          const oversized = images.filter((entry) =>
+            isOversizedUpload(entry.size),
+          );
+          const validImages = images.filter(
+            (entry) => !isOversizedUpload(entry.size),
+          );
+          if (oversized.length > 0) {
+            Alert.alert(
+              "File too large",
+              `${oversized.length} of ${images.length} images ${oversized.length === 1 ? "was" : "were"} skipped: ${UPLOAD_SIZE_ERROR}`,
+            );
+          }
+          if (validImages.length > 1) {
+            onSelectMultipleImages?.(validImages);
+            return;
+          }
+          if (validImages.length === 1) {
+            onSelectAttachment?.(validImages[0]);
+            return;
+          }
+          if (oversized.length > 0) return;
+          // Only videos were picked alongside others; fall back to the first asset.
+          onSelectAttachment?.(toEntry(result.assets[0]));
+          return;
+        }
+
+        const singleEntry = toEntry(result.assets[0]);
+        if (isOversizedUpload(singleEntry.size)) {
+          Alert.alert("File too large", UPLOAD_SIZE_ERROR);
+          return;
+        }
+        onSelectAttachment?.(singleEntry);
       }
     } catch (err) {
       Alert.alert("Error", "Could not pick image/video: " + err.message);
@@ -584,6 +630,10 @@ export default function MessageInput({
       ) {
         const asset = result.assets[0];
         const sizeInBytes = asset.size || asset.fileSize || asset.file?.size;
+        if (isOversizedUpload(sizeInBytes)) {
+          Alert.alert("File too large", UPLOAD_SIZE_ERROR);
+          return;
+        }
         onSelectAttachment?.({
           uri: asset.uri,
           name: asset.name,
@@ -693,8 +743,46 @@ export default function MessageInput({
         </View>
       )}
 
+      {/* Batch image send progress */}
+      {batchProgress && (
+        <View
+          style={[
+            styles.previewBar,
+            { backgroundColor: t.cardBg, borderColor: t.borderColor },
+          ]}
+        >
+          <View style={styles.previewTextWrap}>
+            <Text style={[styles.previewName, { color: t.text }]}>
+              {`Sending ${batchProgress.current} of ${batchProgress.total}...`}
+            </Text>
+            {uploadProgress ? (
+              <View style={{ marginTop: 4 }}>
+                <View
+                  style={{
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: t.isDark
+                      ? "rgba(255,255,255,0.12)"
+                      : "rgba(0,0,0,0.1)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <View
+                    style={{
+                      height: "100%",
+                      backgroundColor: t.accent,
+                      width: `${uploadProgress.percentage}%`,
+                    }}
+                  />
+                </View>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      )}
+
       {/* Attachment preview bar */}
-      {attachment && (
+      {!batchProgress && attachment && (
         <View
           style={[
             styles.previewBar,

@@ -7,7 +7,7 @@ import React, {
   useCallback,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppState } from "react-native";
+import { AppState, Appearance } from "react-native";
 import { blockPolicy } from "../utils/blockPolicy";
 import { createBlockRefresh } from "../utils/blockRefresh";
 import { authService } from "../services/auth";
@@ -18,6 +18,7 @@ import {
   registerForPushNotificationsAsync,
   registerPushToken,
 } from "../services/notifications";
+import { onSessionExpired, SESSION_EXPIRED_MESSAGE } from "../services/session.js";
 import { THEMES } from "../theme/colors";
 
 const AppContext = createContext(null);
@@ -27,7 +28,10 @@ export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [conversations, setConversations] = useState([]);
-  const [themeKey, setThemeKey] = useState("light");
+  const [themePreference, setThemePreference] = useState("light"); // "light" | "dark" | "system"
+  const [systemScheme, setSystemScheme] = useState(
+    () => Appearance?.getColorScheme?.() || "light",
+  );
   const [syncState, setSyncState] = useState("connecting");
   const [presenceMap, setPresenceMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
@@ -36,11 +40,18 @@ export function AppProvider({ children }) {
   const [blockedByUserIds, setBlockedByUserIds] = useState([]);
   const [blockStateVersion, setBlockStateVersion] = useState(0);
   const [blockStateReady, setBlockStateReady] = useState(false);
+  const [sessionExpiredMessage, setSessionExpiredMessage] = useState(null);
   const relationsRef = useRef({ outgoing: [], incoming: [], ready: false });
   const blockRefreshRef = useRef(null);
   const conversationGenerationRef = useRef(0);
   const authTokenRef = useRef(null);
 
+  const themeKey =
+    themePreference === "system"
+      ? systemScheme === "dark"
+        ? "dark"
+        : "light"
+      : themePreference;
   const t = THEMES[themeKey] || THEMES.light;
 
   // ─── Auth ────────────────────────────────────────────────────────────────
@@ -90,20 +101,52 @@ export function AppProvider({ children }) {
     setBlockedByUserIds([]);
   }, []);
 
+  const clearSessionExpiredMessage = useCallback(() => {
+    setSessionExpiredMessage(null);
+  }, []);
+
+  // ─── Expired-session recovery ───────────────────────────────────────────
+  // Fired by services/api.js when a request comes back 401: forces a full
+  // logout (clearing polling/WebSocket/state) and surfaces a message on the
+  // login screen instead of leaving the user stuck re-hitting the same 401.
+  useEffect(() => {
+    const unsubscribe = onSessionExpired(() => {
+      setSessionExpiredMessage(SESSION_EXPIRED_MESSAGE);
+      logout();
+    });
+    return unsubscribe;
+  }, [logout]);
+
   // ─── Theme ───────────────────────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem(THEME_KEY)
       .then((saved) => {
-        if (saved && THEMES[saved])
-          setThemeKey(THEMES[saved].isDark ? "dark" : "light");
+        if (saved === "system") setThemePreference("system");
+        else if (saved && THEMES[saved])
+          setThemePreference(THEMES[saved].isDark ? "dark" : "light");
       })
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (themePreference !== "system") return;
+    const subscription = Appearance?.addChangeListener?.(({ colorScheme }) =>
+      setSystemScheme(colorScheme || "light"),
+    );
+    return () => subscription?.remove?.();
+  }, [themePreference]);
+
   const changeTheme = useCallback(async (newKey) => {
-    if (!THEMES[newKey]) return;
-    const nextKey = THEMES[newKey].isDark ? "dark" : "light";
-    setThemeKey(nextKey);
+    const nextKey =
+      newKey === "system"
+        ? "system"
+        : THEMES[newKey]
+          ? THEMES[newKey].isDark
+            ? "dark"
+            : "light"
+          : null;
+    if (!nextKey) return;
+    setThemePreference(nextKey);
     await AsyncStorage.setItem(THEME_KEY, nextKey).catch(() => {});
   }, []);
 
@@ -301,6 +344,11 @@ export function AppProvider({ children }) {
     userRef.current = user;
   }, [user]);
 
+  const conversationsRef = useRef(conversations);
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
+
   const loadConversationsRef = useRef(loadConversations);
   useEffect(() => {
     loadConversationsRef.current = loadConversations;
@@ -413,6 +461,54 @@ export function AppProvider({ children }) {
             String(c.id) === convIdStr ? { ...c, unread_count: 0 } : c,
           ),
         );
+
+        // ── Group admin promoted/demoted ────────────────────────────────
+      } else if (event === "group_admin_updated") {
+        const convIdStr = String(data.conversation_id || "");
+        const targetId = String(data.target_user_id || "");
+        if (!convIdStr || !targetId) return;
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (String(c.id || c.conversation_id) !== convIdStr) return c;
+            const participants = (c.participants || []).map((p) =>
+              String(p.user_id || p.id) === targetId
+                ? { ...p, role: data.is_admin ? "admin" : "member" }
+                : p,
+            );
+            return { ...c, participants };
+          }),
+        );
+
+        // ── Group member added ───────────────────────────────────────────
+      } else if (event === "group_member_added") {
+        const convIdStr = String(data.conversation_id || "");
+        const targetId = String(data.target_user_id || "");
+        if (!convIdStr || !targetId) return;
+        const conv = conversationsRef.current.find(
+          (c) => String(c.id || c.conversation_id) === convIdStr,
+        );
+        const alreadyMember = (conv?.participants || []).some(
+          (p) => String(p.user_id || p.id) === targetId,
+        );
+        // The event only carries the target user id; refresh from the
+        // server to pick up their username/avatar/display_name.
+        if (!alreadyMember) loadConversationsRef.current(false);
+
+        // ── Group title/avatar updated ────────────────────────────────────
+      } else if (event === "group_updated") {
+        const convIdStr = String(data.conversation_id || "");
+        if (!convIdStr) return;
+        setConversations((prev) =>
+          prev.map((c) =>
+            String(c.id || c.conversation_id) === convIdStr
+              ? {
+                  ...c,
+                  title: data.title ?? c.title,
+                  avatar_url: data.avatar_url ?? c.avatar_url,
+                }
+              : c,
+          ),
+        );
       }
     };
 
@@ -442,7 +538,10 @@ export function AppProvider({ children }) {
     authLoading,
     login,
     logout,
+    sessionExpiredMessage,
+    clearSessionExpiredMessage,
     themeKey,
+    themePreference,
     theme: t,
     changeTheme,
     conversations,

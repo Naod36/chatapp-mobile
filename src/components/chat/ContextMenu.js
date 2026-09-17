@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from "react-native";
 
-const REACTION_EMOJIS = ["❤️", "👍", "😂", "😮", "😢", "🔥"];
+const REACTION_EMOJIS = ["❤️", "👍", "😂", "😮", "😢", "🔥", "😀", "😡"];
 
 /**
  * ContextMenu — long-press message action modal.
@@ -26,23 +26,59 @@ export default function ContextMenu({
   onEdit,
   onPin,
   onDelete,
+  onShareImage,
+  onCopyImage,
+  onSaveImage,
+  onSaveVideo,
+  onRetrySend,
+  onDiscardFailed,
   onClose,
   interactionsDisabled = false,
 }) {
   if (!message) return null;
 
-  const actions = [
-    { label: "Reply", onPress: onReply },
-    ...(isOwn && message.content
-      ? [{ label: "Edit Message", onPress: onEdit }]
-      : []),
-    { label: "Copy Text", onPress: onCopy, disabled: !message.content },
-    {
-      label: isPinned || message.is_pinned ? "Unpin Message" : "Pin Message",
-      onPress: onPin,
-    },
-    ...(isOwn ? [{ label: "Delete", onPress: onDelete, danger: true }] : []),
-  ].filter((action) => !interactionsDisabled || action.onPress === onCopy);
+  const isImage = message.message_type === "image";
+  const isVideo = message.message_type === "video";
+  const isFailed = message.status === "failed";
+
+  // Failed messages never reached the server: offer retry/copy/discard only.
+  const actions = isFailed
+    ? [
+        { label: "Retry Send", onPress: onRetrySend },
+        { label: "Copy Text", onPress: onCopy, disabled: !message.content },
+        { label: "Discard", onPress: onDiscardFailed, danger: true },
+      ].filter((action) => !interactionsDisabled || action.onPress === onCopy)
+    : [
+        { label: "Reply", onPress: onReply },
+        ...(isOwn && message.content
+          ? [{ label: "Edit Message", onPress: onEdit }]
+          : []),
+        { label: "Copy Text", onPress: onCopy, disabled: !message.content },
+        ...(isImage
+          ? [
+              { label: "Copy Image", onPress: onCopyImage },
+              { label: "Share Image", onPress: onShareImage },
+              { label: "Save Image", onPress: onSaveImage },
+            ]
+          : []),
+        ...(isVideo ? [{ label: "Save Video", onPress: onSaveVideo }] : []),
+        {
+          label:
+            isPinned || message.is_pinned ? "Unpin Message" : "Pin Message",
+          onPress: onPin,
+        },
+        ...(isOwn
+          ? [{ label: "Delete", onPress: onDelete, danger: true }]
+          : []),
+      ].filter(
+        (action) =>
+          !interactionsDisabled ||
+          action.onPress === onCopy ||
+          action.onPress === onShareImage ||
+          action.onPress === onCopyImage ||
+          action.onPress === onSaveImage ||
+          action.onPress === onSaveVideo,
+      );
 
   return (
     <Modal

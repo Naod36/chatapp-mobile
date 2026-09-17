@@ -30,6 +30,7 @@ function ConversationItem({
   onPress,
   isTyping,
   isPinned = false,
+  isMuted = false,
 }) {
   const {
     theme: t,
@@ -166,12 +167,35 @@ function ConversationItem({
           {isPinned && (
             <View
               accessibilityLabel="Pinned chat"
-              style={{ marginRight: hasUnread ? 8 : 0 }}
+              style={{ marginRight: hasUnread || isMuted ? 8 : 0 }}
             >
               <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M16 3l5 5-4 1-4 4v4l-3-3-6 6 6-6-3-3h4l4-4z"
                   stroke={t.accent}
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          )}
+          {isMuted && (
+            <View
+              accessibilityLabel="Muted chat"
+              style={{ marginRight: hasUnread ? 8 : 0 }}
+            >
+              <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M15 8a3 3 0 00-6 0v4l-2 3h10l-2-3V8z"
+                  stroke={t.textMuted}
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <Path
+                  d="M3 3l18 18"
+                  stroke={t.textMuted}
                   strokeWidth="1.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"

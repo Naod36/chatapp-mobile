@@ -2,17 +2,44 @@ import { Platform } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch } from "./api";
+
+const MUTED_CONVERSATIONS_KEY = "@flowchat_muted_conversations";
+
+// In-memory cache of muted conversation ids, mirroring the pattern used for
+// other AsyncStorage-backed flags. Refreshed on mute toggle and app focus.
+let mutedConversationIds = [];
+
+export async function refreshMutedConversationsCache() {
+  try {
+    const raw = await AsyncStorage.getItem(MUTED_CONVERSATIONS_KEY);
+    const ids = raw ? JSON.parse(raw) : [];
+    mutedConversationIds = Array.isArray(ids) ? ids.map(String) : [];
+  } catch {
+    mutedConversationIds = [];
+  }
+  return mutedConversationIds;
+}
+
+export function isConversationMuted(conversationId) {
+  return mutedConversationIds.includes(String(conversationId));
+}
 
 // Controls how notifications are presented while the app is in the foreground.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    const conversationId =
+      notification?.request?.content?.data?.conversation_id;
+    const muted = conversationId != null && isConversationMuted(conversationId);
+    return {
+      shouldShowAlert: !muted,
+      shouldPlaySound: !muted,
+      shouldSetBadge: false,
+      shouldShowBanner: !muted,
+      shouldShowList: !muted,
+    };
+  },
 });
 
 export const MESSAGE_CATEGORY_ID = "message";

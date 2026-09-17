@@ -209,6 +209,7 @@ function AccountPanel({
     blockStateVersion,
     blockStateReady,
     changeTheme,
+    themePreference,
   } = useApp();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -244,6 +245,7 @@ function AccountPanel({
     display_name: "",
     bio: "",
     avatar_url: "",
+    is_public: true,
   });
   const [originalProfile, setOriginalProfile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -292,7 +294,8 @@ function AccountPanel({
   const hasChanges =
     originalProfile &&
     (profile.display_name !== originalProfile.display_name ||
-      profile.bio !== originalProfile.bio);
+      profile.bio !== originalProfile.bio ||
+      profile.is_public !== originalProfile.is_public);
 
   useEffect(() => {
     if (visible) {
@@ -315,6 +318,7 @@ function AccountPanel({
               display_name: p.display_name || p.username || "",
               bio: p.bio || "",
               avatar_url: p.avatar_url || "",
+              is_public: p.is_public !== false,
             };
             setProfile(next);
             setOriginalProfile(next);
@@ -407,6 +411,7 @@ function AccountPanel({
         display_name: profile.display_name,
         bio: profile.bio,
         avatar_url: profile.avatar_url,
+        is_public: profile.is_public !== false,
         status: "online",
       });
       setOriginalProfile(profile);
@@ -775,6 +780,42 @@ function AccountPanel({
                       autoCorrect={false}
                     />
                   </View>
+                  <View
+                    style={[
+                      styles.groupDivider,
+                      { backgroundColor: t.borderColor },
+                    ]}
+                  />
+                  <View style={styles.settingsRow}>
+                    <View style={styles.settingsRowTextCol}>
+                      <Text
+                        style={[styles.settingsRowText, { color: t.text }]}
+                      >
+                        Public Search Visibility
+                      </Text>
+                      <Text
+                        style={[
+                          styles.settingsRowSubtext,
+                          { color: t.textMuted },
+                        ]}
+                      >
+                        Allow users to find you via search
+                      </Text>
+                    </View>
+                    <Switch
+                      value={profile.is_public !== false}
+                      onValueChange={(v) =>
+                        setProfile((p) => ({ ...p, is_public: v }))
+                      }
+                      trackColor={{ false: t.borderColor, true: t.accent }}
+                      thumbColor="#fff"
+                      accessibilityRole="switch"
+                      accessibilityLabel="Public Search Visibility"
+                      accessibilityState={{
+                        checked: profile.is_public !== false,
+                      }}
+                    />
+                  </View>
                 </View>
 
                 {/* Preferences group */}
@@ -802,6 +843,40 @@ function AccountPanel({
                       value={notificationsEnabled}
                       onValueChange={handleToggleNotifications}
                       disabled={notifSaving}
+                      trackColor={{ false: t.borderColor, true: t.accent }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                  <View style={styles.settingsRow}>
+                    <View style={styles.settingsRowLeft}>
+                      <View style={styles.settingsRowTextCol}>
+                        <Text
+                          style={[styles.settingsRowText, { color: t.text }]}
+                        >
+                          Match Device Theme
+                        </Text>
+                        <Text
+                          style={[
+                            styles.settingsRowHint,
+                            { color: t.textMuted },
+                          ]}
+                        >
+                          Follow your device's light/dark setting
+                        </Text>
+                      </View>
+                    </View>
+                    <Switch
+                      accessibilityRole="switch"
+                      accessibilityLabel="Match Device Theme"
+                      accessibilityState={{
+                        checked: themePreference === "system",
+                      }}
+                      value={themePreference === "system"}
+                      onValueChange={(enabled) =>
+                        changeTheme(
+                          enabled ? "system" : t.isDark ? "dark" : "light",
+                        )
+                      }
                       trackColor={{ false: t.borderColor, true: t.accent }}
                       thumbColor="#fff"
                     />
@@ -1339,6 +1414,7 @@ export default function ConversationListScreen({ navigation }) {
   const [accountOpen, setAccountOpen] = useState(false);
   const [myProfile, setMyProfile] = useState(null);
   const [pinnedConversationIds, setPinnedConversationIds] = useState([]);
+  const [mutedConversationIds, setMutedConversationIds] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("all");
 
   useEffect(() => {
@@ -1356,6 +1432,13 @@ export default function ConversationListScreen({ navigation }) {
           const ids = raw ? JSON.parse(raw) : [];
           if (active)
             setPinnedConversationIds(Array.isArray(ids) ? ids.map(String) : []);
+        })
+        .catch(() => {});
+      AsyncStorage.getItem("@flowchat_muted_conversations")
+        .then((raw) => {
+          const ids = raw ? JSON.parse(raw) : [];
+          if (active)
+            setMutedConversationIds(Array.isArray(ids) ? ids.map(String) : []);
         })
         .catch(() => {});
       return () => {
@@ -1476,6 +1559,7 @@ export default function ConversationListScreen({ navigation }) {
               <ConversationItem
                 conversation={item}
                 isPinned={pinnedConversationIds.includes(cid)}
+                isMuted={mutedConversationIds.includes(cid)}
                 onPress={() => handleSelectConversation(item)}
                 isTyping={Boolean(typingMap[cid])}
               />
@@ -1775,6 +1859,19 @@ const styles = StyleSheet.create({
   settingsRowText: {
     fontSize: 15,
     fontWeight: "600",
+  },
+  settingsRowHint: {
+    fontSize: 11.5,
+    marginTop: 2,
+  },
+  settingsRowTextCol: {
+    flexDirection: "column",
+    gap: 2,
+    flexShrink: 1,
+    paddingRight: 10,
+  },
+  settingsRowSubtext: {
+    fontSize: 12,
   },
   inlineFormWrap: {
     paddingHorizontal: 14,

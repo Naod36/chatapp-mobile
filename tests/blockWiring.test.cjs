@@ -49,6 +49,12 @@ function messageFixture(outgoing = [], incoming = [], type = "direct") {
     },
   };
   const { useMessages } = runner.load("src/hooks/useMessages.js", {
+    "react-native": {
+      AppState: {
+        currentState: "active",
+        addEventListener: () => ({ remove() {} }),
+      },
+    },
     "../context/AppContext": { useApp: () => app },
     "../services/conversations": { conversationService: service },
     "../services/websocket": {
@@ -360,7 +366,13 @@ test("AppContext refreshes on event, reconnect, foreground and 12-second polling
     },
   };
   const { AppProvider } = runner.load("src/context/AppContext.js", {
-    "react-native": { AppState: appState },
+    "react-native": {
+      AppState: appState,
+      Appearance: {
+        getColorScheme: () => "light",
+        addChangeListener: () => ({ remove() {} }),
+      },
+    },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
     "../services/auth": {
       authService: { getCurrentUser: async () => null, logout: async () => {} },
@@ -663,6 +675,27 @@ test("ChatScreen aborts uploads on a block, prevents the follow-up send and gate
         },
       },
     },
+    "../services/notifications": {
+      refreshMutedConversationsCache: () => {},
+    },
+    "expo-file-system/legacy": {
+      cacheDirectory: "file://cache/",
+      EncodingType: { Base64: "base64" },
+      downloadAsync: async (uri, fileUri) => ({ uri: fileUri }),
+      readAsStringAsync: async () => "base64imagedata",
+    },
+    "expo-clipboard": { setImageAsync: async () => {} },
+    "expo-media-library": {
+      requestPermissionsAsync: async () => ({
+        granted: true,
+        status: "granted",
+      }),
+      saveToLibraryAsync: async () => {},
+    },
+    "expo-sharing": {
+      isAvailableAsync: async () => true,
+      shareAsync: async () => {},
+    },
   };
   for (const name of [
     "ChatHeader",
@@ -674,6 +707,7 @@ test("ChatScreen aborts uploads on a block, prevents the follow-up send and gate
     "PinnedListModal",
     "TypingIndicator",
     "ContextMenu",
+    "FullScreenImageViewer",
   ]) {
     mocks[`../components/chat/${name}`] = { __esModule: true, default: name };
   }
@@ -707,6 +741,7 @@ test("ChatScreen aborts uploads on a block, prevents the follow-up send and gate
   const pending = nodes(tree)
     .find((node) => node.type === "MessageInput")
     .props.onSend();
+  await settle();
   assert.ok(uploadSignal);
   blocked = true;
   app.blockStateVersion++;

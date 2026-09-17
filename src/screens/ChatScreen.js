@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
@@ -13,12 +13,19 @@ import {
   Alert,
   Clipboard,
   Keyboard,
+  Share,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Clip from "expo-clipboard";
+import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing";
 
 import { useApp } from "../context/AppContext";
 import { useMessages } from "../hooks/useMessages";
 import { conversationService } from "../services/conversations";
+import { API_BASE } from "../services/api";
+import { refreshMutedConversationsCache } from "../services/notifications";
 import ChatHeader from "../components/chat/ChatHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import ChatOptionsMenu from "../components/chat/ChatOptionsMenu";
@@ -28,8 +35,29 @@ import PinnedBanner from "../components/chat/PinnedBanner";
 import PinChoiceModal from "../components/chat/PinChoiceModal";
 import PinnedListModal from "../components/chat/PinnedListModal";
 import TypingIndicator from "../components/chat/TypingIndicator";
+import FullScreenImageViewer from "../components/chat/FullScreenImageViewer";
 import ContextMenu from "../components/chat/ContextMenu";
 import { redactMessage } from "../utils/blockPolicy";
+
+function getAssetUrl(url) {
+  if (!url) return null;
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  )
+    return url;
+  return `${API_BASE}${url}`;
+}
+
+// Shared by Copy/Save/Share media actions: downloads a message's remote media to a local cache file.
+async function downloadMediaToCache(remoteUrl) {
+  const filename =
+    remoteUrl.split("/").pop().split("?")[0] || `media-${Date.now()}`;
+  const localUri = `${FileSystem.cacheDirectory}${filename}`;
+  const result = await FileSystem.downloadAsync(remoteUrl, localUri);
+  return result.uri;
+}
 
 function EmptyChatIcon({ color }) {
   return (
@@ -89,6 +117,7 @@ export default function ChatScreen({ route, navigation }) {
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [isChatPinned, setIsChatPinned] = useState(false);
+  const [isChatMuted, setIsChatMuted] = useState(false);
 
   const handleToggleBlock = useCallback(async () => {
     setShowBlockConfirm(false);
@@ -131,6 +160,29 @@ export default function ChatScreen({ route, navigation }) {
     setIsChatPinned(!isChatPinned);
   }, [convId, isChatPinned]);
 
+  useEffect(() => {
+    AsyncStorage.getItem("@flowchat_muted_conversations")
+      .then((raw) => {
+        const ids = raw ? JSON.parse(raw) : [];
+        setIsChatMuted(ids.includes(convId));
+      })
+      .catch(() => {});
+  }, [convId]);
+
+  const handleToggleChatMute = useCallback(async () => {
+    const raw = await AsyncStorage.getItem("@flowchat_muted_conversations");
+    const ids = raw ? JSON.parse(raw) : [];
+    const next = isChatMuted
+      ? ids.filter((id) => id !== convId)
+      : [...ids.filter((id) => id !== convId), convId];
+    await AsyncStorage.setItem(
+      "@flowchat_muted_conversations",
+      JSON.stringify(next),
+    );
+    setIsChatMuted(!isChatMuted);
+    refreshMutedConversationsCache();
+  }, [convId, isChatMuted]);
+
   const {
     messages,
     loading,
@@ -141,6 +193,8 @@ export default function ChatScreen({ route, navigation }) {
     pinMessage,
     unpinMessage,
     deleteMessage,
+    retryMessage,
+    discardMessage,
     toggleReaction,
     handleTypingStart,
     handleTypingStop,
@@ -149,6 +203,33 @@ export default function ChatScreen({ route, navigation }) {
   } = useMessages(convId, conversation.pinned_message_id, conversation);
 
   const [inputText, setInputText] = useState("");
+
+  // ─── Per-conversation drafts (MA01) ───────────────────────────────────────
+  // Keyed by user so switching accounts never leaks another user's draft.
+  const draftKey = `@flowchat_draft_${currentUserId}_${convId}`;
+  const draftLoadedRef = useRef(false);
+  const inputTextRef = useRef(inputText);
+  inputTextRef.current = inputText;
+  useEffect(() => {
+    draftLoadedRef.current = false;
+    AsyncStorage.getItem(draftKey)
+      .then((saved) => {
+        if (saved && !inputTextRef.current) setInputText(saved);
+      })
+      .catch(() => {})
+      .finally(() => {
+        draftLoadedRef.current = true;
+      });
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftLoadedRef.current) return;
+    const timer = setTimeout(() => {
+      if (inputText) AsyncStorage.setItem(draftKey, inputText).catch(() => {});
+      else AsyncStorage.removeItem(draftKey).catch(() => {});
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [inputText, draftKey]);
+
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [selectedMsg, setSelectedMsg] = useState(null);
@@ -160,11 +241,92 @@ export default function ChatScreen({ route, navigation }) {
   const [attachment, setAttachment] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [batchProgress, setBatchProgress] = useState(null);
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [messageSearchIndex, setMessageSearchIndex] = useState(0);
+  const [imageViewerIndex, setImageViewerIndex] = useState(null);
 
+  const imageMessages = useMemo(
+    () =>
+      messages.filter(
+        (m) => m.message_type === "image" && (m.media_url || m.file_url),
+      ),
+    [messages],
+  );
+
+  const openImageViewer = useCallback(
+    (msg) => {
+      const msgId = String(msg.id || msg.message_id);
+      const index = imageMessages.findIndex(
+        (m) => String(m.id || m.message_id) === msgId,
+      );
+      if (index >= 0) setImageViewerIndex(index);
+    },
+    [imageMessages],
+  );
+
+  const closeImageViewer = useCallback(() => setImageViewerIndex(null), []);
+
+  // ─── Preserve reading position ────────────────────────────────────────────
+  // Only auto-scroll to the newest message when the reader is already near
+  // the bottom; otherwise track how many new messages arrived so a "jump to
+  // latest" affordance can be shown instead of yanking them down mid-read.
   const flatListRef = useRef(null);
+  const nearBottomRef = useRef(true);
+  const previousMessageIdsRef = useRef(new Set());
+  const hasInitializedRef = useRef(false);
+  const [unseenCount, setUnseenCount] = useState(0);
+
+  useEffect(() => {
+    hasInitializedRef.current = false;
+    previousMessageIdsRef.current = new Set();
+    nearBottomRef.current = true;
+    setUnseenCount(0);
+  }, [convId]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const currentIds = new Set(
+      messages.map((m) => String(m.id || m.message_id)),
+    );
+    const addedIds = [...currentIds].filter(
+      (id) => !previousMessageIdsRef.current.has(id),
+    );
+    previousMessageIdsRef.current = currentIds;
+
+    if (!hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      requestAnimationFrame(() =>
+        flatListRef.current?.scrollToEnd({ animated: false }),
+      );
+      return;
+    }
+    if (pinnedMessages.length > 0) return;
+    if (nearBottomRef.current) {
+      flatListRef.current?.scrollToEnd({ animated: true });
+      setUnseenCount(0);
+    } else if (addedIds.length > 0) {
+      setUnseenCount((count) => count + addedIds.length);
+    }
+  }, [messages, pinnedMessages.length]);
+
+  const handleListScroll = useCallback((event) => {
+    const { contentOffset, contentSize, layoutMeasurement } =
+      event.nativeEvent;
+    const distanceFromBottom =
+      contentSize.height - contentOffset.y - layoutMeasurement.height;
+    const isNearBottom = distanceFromBottom < 120;
+    nearBottomRef.current = isNearBottom;
+    if (isNearBottom) setUnseenCount(0);
+  }, []);
+
+  const jumpToLatest = useCallback(() => {
+    nearBottomRef.current = true;
+    setUnseenCount(0);
+    flatListRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
   const sendControllerRef = useRef(null);
   const canInteract = useCallback(() => {
     try {
@@ -304,6 +466,65 @@ export default function ChatScreen({ route, navigation }) {
     closeContextMenu();
   }, [selectedMsg, closeContextMenu]);
 
+  const handleShareImage = useCallback(async () => {
+    const msg = selectedMsg;
+    closeContextMenu();
+    const imageUrl = msg && getAssetUrl(msg.media_url || msg.file_url);
+    if (!imageUrl) return;
+    try {
+      const localUri = await downloadMediaToCache(imageUrl);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(localUri);
+        return;
+      }
+      const shareOptions =
+        Platform.OS === "ios" ? { url: imageUrl } : { message: imageUrl };
+      await Share.share(shareOptions);
+    } catch (error) {
+      Alert.alert("Action failed", error.message);
+    }
+  }, [selectedMsg, closeContextMenu]);
+
+  const handleCopyImage = useCallback(async () => {
+    const msg = selectedMsg;
+    closeContextMenu();
+    const imageUrl = msg && getAssetUrl(msg.media_url || msg.file_url);
+    if (!imageUrl) return;
+    try {
+      const localUri = await downloadMediaToCache(imageUrl);
+      const base64 = await FileSystem.readAsStringAsync(localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      await Clip.setImageAsync(base64);
+      Alert.alert("Copied", "Image copied to clipboard.");
+    } catch (error) {
+      Alert.alert("Error", error.message || "Failed to copy image");
+    }
+  }, [selectedMsg, closeContextMenu]);
+
+  const handleSaveMedia = useCallback(async () => {
+    const msg = selectedMsg;
+    closeContextMenu();
+    const mediaUrl = msg && getAssetUrl(msg.media_url || msg.file_url);
+    if (!mediaUrl) return;
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permission required",
+          "Please grant photo library access to save media.",
+        );
+        return;
+      }
+      const localUri = await downloadMediaToCache(mediaUrl);
+      await MediaLibrary.saveToLibraryAsync(localUri);
+      Alert.alert("Saved", "Media saved to your gallery.");
+    } catch (error) {
+      Alert.alert("Error", error.message || "Failed to save media");
+    }
+  }, [selectedMsg, closeContextMenu]);
+
   const handlePinRequest = useCallback(() => {
     if (!canInteract()) return;
     if (!selectedMsg) return;
@@ -352,7 +573,49 @@ export default function ChatScreen({ route, navigation }) {
     closeContextMenu();
   }, [selectedMsg, currentUserId, deleteMessage, closeContextMenu]);
 
+  const handleRetrySend = useCallback(async () => {
+    if (!selectedMsg || !canInteract()) return;
+    const msg = selectedMsg;
+    closeContextMenu();
+    try {
+      await retryMessage(msg);
+    } catch (err) {
+      Alert.alert("Message not sent", err.message || "Retry failed.");
+    }
+  }, [selectedMsg, retryMessage, canInteract, closeContextMenu]);
+
+  const handleDiscardFailed = useCallback(() => {
+    if (!selectedMsg) return;
+    discardMessage(selectedMsg.id || selectedMsg.message_id);
+    closeContextMenu();
+  }, [selectedMsg, discardMessage, closeContextMenu]);
+
   // ─── Send ─────────────────────────────────────────────────────────────────
+  const buildAttachmentFormData = useCallback(async (att, controller) => {
+    const formData = new FormData();
+    if (att.file) {
+      formData.append("file", att.file);
+    } else if (
+      Platform.OS === "web" ||
+      att.uri?.startsWith("blob:") ||
+      att.uri?.startsWith("data:")
+    ) {
+      const response = await fetch(att.uri, { signal: controller.signal });
+      const blob = await response.blob();
+      const fileObj = new File([blob], att.name || "upload", {
+        type: att.type || blob.type || "application/octet-stream",
+      });
+      formData.append("file", fileObj);
+    } else {
+      formData.append("file", {
+        uri: att.uri,
+        name: att.name || "upload",
+        type: att.type || "application/octet-stream",
+      });
+    }
+    return formData;
+  }, []);
+
   const handleSend = useCallback(async () => {
     if (sendControllerRef.current || !canInteract()) return;
     const controller = new AbortController();
@@ -388,29 +651,10 @@ export default function ChatScreen({ route, navigation }) {
           totalFormatted: attachment.sizeFormatted || "file",
         });
         try {
-          const formData = new FormData();
-          if (attachment.file) {
-            formData.append("file", attachment.file);
-          } else if (
-            Platform.OS === "web" ||
-            attachment.uri?.startsWith("blob:") ||
-            attachment.uri?.startsWith("data:")
-          ) {
-            const response = await fetch(attachment.uri, {
-              signal: controller.signal,
-            });
-            const blob = await response.blob();
-            const fileObj = new File([blob], attachment.name || "upload", {
-              type: attachment.type || blob.type || "application/octet-stream",
-            });
-            formData.append("file", fileObj);
-          } else {
-            formData.append("file", {
-              uri: attachment.uri,
-              name: attachment.name || "upload",
-              type: attachment.type || "application/octet-stream",
-            });
-          }
+          const formData = await buildAttachmentFormData(
+            attachment,
+            controller,
+          );
 
           assertInteractionAllowed();
           if (controller.signal.aborted) throw new Error("Send cancelled.");
@@ -448,6 +692,7 @@ export default function ChatScreen({ route, navigation }) {
       setInputText("");
       setAttachment(null);
       setReplyingTo(null);
+      AsyncStorage.removeItem(draftKey).catch(() => {});
     } catch (error) {
       Alert.alert(
         "Message not sent",
@@ -465,7 +710,62 @@ export default function ChatScreen({ route, navigation }) {
     editingMessage,
     editMessage,
     sendMessage,
+    draftKey,
   ]);
+
+  // ─── Batch send multiple picked images ────────────────────────────────────
+  const handleSendMultipleImages = useCallback(
+    async (assets) => {
+      if (!assets || assets.length === 0) return;
+      if (sendControllerRef.current || !canInteract()) return;
+      const controller = new AbortController();
+      sendControllerRef.current = controller;
+      setIsUploading(true);
+      const total = assets.length;
+      const failedNames = [];
+      try {
+        for (let i = 0; i < total; i++) {
+          const asset = assets[i];
+          setBatchProgress({ current: i + 1, total });
+          setUploadProgress(null);
+          try {
+            assertInteractionAllowed();
+            if (controller.signal.aborted) throw new Error("Send cancelled.");
+            const formData = await buildAttachmentFormData(asset, controller);
+            const res = await conversationService.uploadFile(
+              formData,
+              (progress) => setUploadProgress(progress),
+              controller.signal,
+            );
+            const mediaUrl = res?.url || res?.file_url || res?.media_url;
+            if (!mediaUrl) throw new Error("Upload did not return a file URL.");
+            await sendMessage(
+              "",
+              null,
+              "image",
+              mediaUrl,
+              asset.name,
+              controller.signal,
+            );
+          } catch (err) {
+            failedNames.push(asset.name || `Image ${i + 1}`);
+          }
+        }
+        if (failedNames.length > 0) {
+          Alert.alert(
+            "Some images failed to send",
+            `Failed: ${failedNames.join(", ")}`,
+          );
+        }
+      } finally {
+        sendControllerRef.current = null;
+        setIsUploading(false);
+        setUploadProgress(null);
+        setBatchProgress(null);
+      }
+    },
+    [canInteract, assertInteractionAllowed, buildAttachmentFormData, sendMessage],
+  );
 
   // ─── Scroll to end on Keyboard show ──────────────────────────────────────
   useEffect(() => {
@@ -518,7 +818,12 @@ export default function ChatScreen({ route, navigation }) {
         typingUser={isTypingActive}
         disableTyping={directDisabled || !blockStateReady}
         onBack={() => navigation.goBack()}
-        onMorePress={canBlock ? handleMorePress : undefined}
+        onMorePress={canBlock || isGroup ? handleMorePress : undefined}
+        onTitlePress={
+          isGroup
+            ? () => navigation.navigate("GroupInfo", { conversation })
+            : undefined
+        }
         isBlocked={isBlockedByThem}
       />
 
@@ -602,21 +907,16 @@ export default function ChatScreen({ route, navigation }) {
               onToggleReaction={handleToggleReaction}
               onLongPress={openContextMenu}
               onSwipeReply={beginReply}
+              onImagePress={openImageViewer}
               suppressReceipts={suppressReceipts}
               interactionsDisabled={directDisabled}
             />
           );
         }}
-        onContentSizeChange={() => {
-          if (messages.length > 0 && pinnedMessages.length === 0) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
-        onLayout={() => {
-          if (messages.length > 0 && pinnedMessages.length === 0) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }
-        }}
+        onContentSizeChange={() => {}}
+        onLayout={() => {}}
+        onScroll={handleListScroll}
+        scrollEventThrottle={100}
         contentContainerStyle={[styles.listContent, { paddingBottom: 12 }]}
         ListEmptyComponent={
           loading ? null : (
@@ -634,6 +934,20 @@ export default function ChatScreen({ route, navigation }) {
 
       <TypingIndicator username={isTypingActive} theme={t} />
 
+      {unseenCount > 0 && (
+        <TouchableOpacity
+          style={[styles.jumpToLatest, { backgroundColor: t.accent }]}
+          onPress={jumpToLatest}
+          accessibilityRole="button"
+          accessibilityLabel={`${unseenCount} new message${unseenCount === 1 ? "" : "s"}, jump to latest`}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.jumpToLatestText}>
+            {unseenCount} new message{unseenCount === 1 ? "" : "s"}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       <MessageInput
         value={inputText}
         onChangeText={setInputText}
@@ -650,11 +964,20 @@ export default function ChatScreen({ route, navigation }) {
         }}
         attachment={attachment}
         onSelectAttachment={setAttachment}
+        onSelectMultipleImages={handleSendMultipleImages}
         onClearAttachment={() => setAttachment(null)}
         isUploading={isUploading}
         uploadProgress={uploadProgress}
+        batchProgress={batchProgress}
         disabled={directDisabled}
         assertInteractionAllowed={assertInteractionAllowed}
+      />
+
+      <FullScreenImageViewer
+        visible={imageViewerIndex !== null}
+        images={imageMessages}
+        startIndex={imageViewerIndex || 0}
+        onClose={closeImageViewer}
       />
 
       <ContextMenu
@@ -670,8 +993,14 @@ export default function ChatScreen({ route, navigation }) {
         onReply={handleReply}
         onEdit={handleEdit}
         onCopy={handleCopy}
+        onShareImage={handleShareImage}
+        onCopyImage={handleCopyImage}
+        onSaveImage={handleSaveMedia}
+        onSaveVideo={handleSaveMedia}
         onPin={handlePinRequest}
         onDelete={handleDelete}
+        onRetrySend={handleRetrySend}
+        onDiscardFailed={handleDiscardFailed}
         onClose={closeContextMenu}
       />
 
@@ -707,7 +1036,15 @@ export default function ChatScreen({ route, navigation }) {
         isBlocked={isUserBlocked}
         isPinned={isChatPinned}
         onTogglePin={handleToggleChatPin}
+        isMuted={isChatMuted}
+        onToggleMute={handleToggleChatMute}
         onToggleBlock={() => setShowBlockConfirm(true)}
+        isGroup={isGroup}
+        canBlock={canBlock}
+        onGroupInfo={() => navigation.navigate("GroupInfo", { conversation })}
+        onSharedMedia={() =>
+          navigation.navigate("SharedMedia", { conversation, messages })
+        }
       />
 
       <ConfirmDialog
@@ -730,6 +1067,23 @@ export default function ChatScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  jumpToLatest: {
+    alignSelf: "center",
+    marginBottom: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  jumpToLatestText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
   messageSearchBar: {
     flexDirection: "row",
     alignItems: "center",

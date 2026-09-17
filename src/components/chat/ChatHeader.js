@@ -22,6 +22,7 @@ export default function ChatHeader({
   onBack,
   onMorePress,
   onSearchPress,
+  onTitlePress,
   isBlocked = false,
   disableTyping = false,
 }) {
@@ -106,7 +107,14 @@ export default function ChatHeader({
         isSaved={isSaved}
       />
 
-      <View style={styles.titleArea}>
+      <TouchableOpacity
+        style={styles.titleArea}
+        activeOpacity={onTitlePress ? 0.7 : 1}
+        disabled={!onTitlePress}
+        onPress={onTitlePress}
+        accessibilityRole={onTitlePress ? "button" : undefined}
+        accessibilityLabel={onTitlePress ? "Open group info" : undefined}
+      >
         <Text style={[styles.titleText, { color: t.text }]} numberOfLines={1}>
           {name}
         </Text>
@@ -123,7 +131,7 @@ export default function ChatHeader({
             {subtitle}
           </Text>
         ) : null}
-      </View>
+      </TouchableOpacity>
 
       {onSearchPress && (
         <TouchableOpacity

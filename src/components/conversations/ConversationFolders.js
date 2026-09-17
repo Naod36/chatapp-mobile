@@ -4,6 +4,12 @@ import { ScrollView, Text, TouchableOpacity, StyleSheet } from "react-native";
 export const CONVERSATION_FOLDERS = [
   { id: "all", label: "All", matches: () => true },
   {
+    id: "unread",
+    label: "Unread",
+    matches: (conversation) => (conversation.unread_count || 0) > 0,
+    emptyText: "No unread chats",
+  },
+  {
     id: "chats",
     label: "Chats",
     matches: (conversation) => conversation.type === "direct",

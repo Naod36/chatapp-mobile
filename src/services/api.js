@@ -1,11 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { expireSession } from "./session.js";
+import { UPLOAD_REJECTED_ERROR } from "../utils/uploadLimits.js";
 
 export const API_BASE = "https://chatapp-backend-chyk.onrender.com";
 export const WS_BASE = "wss://chatapp-backend-chyk.onrender.com";
 
 function parseErrorMessage(response, data) {
   if (response.status === 413) {
-    return "The attachment size is too large. Please select a smaller file (under 25MB).";
+    return UPLOAD_REJECTED_ERROR;
   }
   if (response.status === 422) {
     return "Invalid request payload. Please check your details and try again.";
@@ -78,6 +80,9 @@ export async function apiFetch(endpoint, options = {}) {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        expireSession(token).catch(() => {});
+      }
       const errMsg = parseErrorMessage(response, data);
       throw new Error(errMsg);
     }
@@ -155,6 +160,9 @@ export async function uploadFileWithProgress(
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(data);
       } else {
+        if (xhr.status === 401) {
+          expireSession(token).catch(() => {});
+        }
         const errMsg = parseErrorMessage({ status: xhr.status }, data);
         reject(new Error(errMsg));
       }

@@ -101,6 +101,7 @@ function MessageBubble({
   onToggleReaction,
   onLongPress,
   onSwipeReply,
+  onImagePress,
   repliedMessage,
   onReplyPress,
   suppressReceipts = false,
@@ -262,11 +263,19 @@ function MessageBubble({
 
             {/* Image */}
             {isImage && (msg.media_url || msg.file_url) && (
-              <Image
-                source={{ uri: getAssetUrl(msg.media_url || msg.file_url) }}
-                style={styles.imageAttachment}
-                resizeMode="cover"
-              />
+              <TouchableOpacity
+                activeOpacity={0.9}
+                disabled={!onImagePress}
+                onPress={() => onImagePress?.(msg)}
+                accessibilityRole={onImagePress ? "button" : undefined}
+                accessibilityLabel={onImagePress ? "View image" : undefined}
+              >
+                <Image
+                  source={{ uri: getAssetUrl(msg.media_url || msg.file_url) }}
+                  style={styles.imageAttachment}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             )}
 
             {/* Voice */}

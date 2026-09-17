@@ -46,6 +46,12 @@ function harness() {
         slots[index] = { value: callback, deps };
       return slots[index].value;
     },
+    useMemo(factory, deps) {
+      const index = cursor++;
+      if (!slots[index] || changed(slots[index].deps, deps))
+        slots[index] = { value: factory(), deps };
+      return slots[index].value;
+    },
     useEffect(effect, deps) {
       const index = cursor++;
       if (!slots[index] || changed(slots[index].deps, deps)) {

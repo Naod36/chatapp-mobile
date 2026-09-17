@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { AppState } from "react-native";
 import { conversationService } from "../services/conversations";
 import { websocketService } from "../services/websocket";
 import { useApp } from "../context/AppContext";
@@ -47,6 +48,29 @@ export function useMessages(
   const typingTimerRef = useRef(null);
   const sendControllersRef = useRef(new Set());
   const loadedConversationRef = useRef(null);
+  // Read receipts only while the app is actually in the foreground; arrivals
+  // while backgrounded are acknowledged on return (MF04).
+  const pendingReadRef = useRef(false);
+  const sendReadReceipt = useCallback(() => {
+    if (AppState.currentState !== "active") {
+      pendingReadRef.current = true;
+      return;
+    }
+    pendingReadRef.current = false;
+    if (!interactionRef.current())
+      websocketService.send({
+        action: "read_conversation",
+        conversation_id: convId,
+      });
+    markConversationRead(convId);
+  }, [convId, markConversationRead]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && pendingReadRef.current) sendReadReceipt();
+    });
+    return () => subscription.remove();
+  }, [sendReadReceipt]);
 
   useEffect(() => {
     setTypingUser(null);
@@ -120,12 +144,7 @@ export function useMessages(
       });
 
     // Mark conversation as read on open
-    if (!interactionRef.current())
-      websocketService.send({
-        action: "read_conversation",
-        conversation_id: convId,
-      });
-    markConversationRead(convId);
+    sendReadReceipt();
 
     return () => {
       cancelled = true;
@@ -178,12 +197,7 @@ export function useMessages(
         });
 
         if (String(msg.sender_id) !== currentUserId) {
-          if (!interactionRef.current())
-            websocketService.send({
-              action: "read_conversation",
-              conversation_id: convId,
-            });
-          markConversationRead(convId);
+          sendReadReceipt();
         }
       } else if (event === "message_sent" && isCurrentConv(data)) {
         return;
@@ -587,6 +601,29 @@ export function useMessages(
     [convId],
   );
 
+  // ─── Failed-message recovery (MA02) ─────────────────────────────────────
+  const discardMessage = useCallback((msgId) => {
+    setMessages((prev) =>
+      prev.filter(
+        (message) => String(message.id || message.message_id) !== String(msgId),
+      ),
+    );
+  }, []);
+
+  const retryMessage = useCallback(
+    async (msg) => {
+      discardMessage(msg.id || msg.message_id);
+      return sendMessage(
+        msg.content,
+        msg.reply_to_id,
+        msg.message_type,
+        msg.media_url || msg.file_url,
+        msg.file_name,
+      );
+    },
+    [discardMessage, sendMessage],
+  );
+
   return {
     messages: messages.map((message) =>
       redactMessage(
@@ -608,6 +645,8 @@ export function useMessages(
     pinMessage,
     unpinMessage,
     deleteMessage,
+    retryMessage,
+    discardMessage,
     toggleReaction,
     handleTypingStart,
     handleTypingStop,

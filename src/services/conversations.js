@@ -24,7 +24,11 @@ export const conversationService = {
   },
 
   async getMessages(conversationId) {
-    return apiFetch(`/conversations/${conversationId}/messages`);
+    // Passive history fetch: explicit read_conversation WS receipts (sent only
+    // when the chat is actually visible) are responsible for marking read.
+    return apiFetch(
+      `/conversations/${conversationId}/messages?mark_read=false`,
+    );
   },
 
   async getPinnedMessages(conversationId) {

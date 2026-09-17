@@ -34,6 +34,20 @@ test("folders separate chats and groups and leave the source list unchanged", ()
   assert.equal(conversationsInFolder([], "groups").length, 0);
 });
 
+test("unread folder shows only conversations with an unread count", () => {
+  const { conversationsInFolder } = setup();
+  const conversations = [
+    { id: "a", type: "direct", unread_count: 2 },
+    { id: "b", type: "direct", unread_count: 0 },
+    { id: "c", type: "group" },
+  ];
+  const ids = Array.from(
+    conversationsInFolder(conversations, "unread"),
+    (item) => item.id,
+  );
+  assert.deepEqual(ids, ["a"]);
+});
+
 test("pinned ordering is preserved inside each folder without changing recency order", () => {
   const { conversationsInFolder } = setup();
   const conversations = [
@@ -64,7 +78,7 @@ test("tabs expose their selection and switch folders", () => {
     const tabs = nodes(tree).filter(
       (node) => node.props.accessibilityRole === "tab",
     );
-    assert.equal(tabs.length, 3);
+    assert.equal(tabs.length, CONVERSATION_FOLDERS.length);
     assert.equal(
       tabs.filter((tab) => tab.props.accessibilityState.selected).length,
       1,

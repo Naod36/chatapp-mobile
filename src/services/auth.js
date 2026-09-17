@@ -118,6 +118,61 @@ export const authService = {
     }
   },
 
+  async forgotPassword(email) {
+    try {
+      const response = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      return await handleResponse(
+        response,
+        "Password reset is temporarily unavailable. Please try again later.",
+      );
+    } catch (err) {
+      if (
+        err.name === "TypeError" ||
+        (err.message &&
+          (err.message.includes("NetworkError") ||
+            err.message.includes("Failed to fetch")))
+      ) {
+        throw new Error(
+          `Unable to reach the backend server at ${API_BASE}. Please check your connection.`,
+        );
+      }
+      throw err;
+    }
+  },
+
+  async resetPassword(token, password) {
+    try {
+      const response = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token, password }),
+      });
+
+      return await handleResponse(response, "Unable to reset your password.");
+    } catch (err) {
+      if (
+        err.name === "TypeError" ||
+        (err.message &&
+          (err.message.includes("NetworkError") ||
+            err.message.includes("Failed to fetch")))
+      ) {
+        throw new Error(
+          `Unable to reach the backend server at ${API_BASE}. Please check your connection.`,
+        );
+      }
+      throw err;
+    }
+  },
+
   async googleLogin(credential) {
     try {
       const response = await fetch(`${API_BASE}/auth/google`, {

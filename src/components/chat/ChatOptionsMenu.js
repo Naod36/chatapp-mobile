@@ -14,6 +14,12 @@ export default function ChatOptionsMenu({
   onToggleBlock,
   isPinned,
   onTogglePin,
+  isMuted,
+  onToggleMute,
+  isGroup = false,
+  onGroupInfo,
+  onSharedMedia,
+  canBlock = true,
 }) {
   const insets = useSafeAreaInsets();
   if (!visible) return null;
@@ -40,9 +46,43 @@ export default function ChatOptionsMenu({
           },
         ]}
       >
+        {isGroup && onGroupInfo && (
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Group info"
+            onPress={() => {
+              onClose();
+              onGroupInfo();
+            }}
+          >
+            <Text style={[styles.rowText, { color: t.text }]}>
+              Group Info
+            </Text>
+          </TouchableOpacity>
+        )}
+        {onSharedMedia && (
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            accessibilityRole="button"
+            accessibilityLabel="Shared media"
+            onPress={() => {
+              onClose();
+              onSharedMedia();
+            }}
+          >
+            <Text style={[styles.rowText, { color: t.text }]}>
+              Shared Media
+            </Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.row}
           activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={isPinned ? "Unpin chat" : "Pin chat"}
           onPress={() => {
             onClose();
             onTogglePin();
@@ -55,15 +95,32 @@ export default function ChatOptionsMenu({
         <TouchableOpacity
           style={styles.row}
           activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel={isMuted ? "Unmute chat" : "Mute chat"}
           onPress={() => {
             onClose();
-            onToggleBlock();
+            onToggleMute();
           }}
         >
-          <Text style={[styles.rowText, { color: t.danger }]}>
-            {isBlocked ? "Unblock User" : "Block User"}
+          <Text style={[styles.rowText, { color: t.text }]}>
+            {isMuted ? "Unmute Chat" : "Mute Chat"}
           </Text>
         </TouchableOpacity>
+        {/* Add future per-conversation actions as additional rows here. */}
+        {canBlock && (
+          <TouchableOpacity
+            style={styles.row}
+            activeOpacity={0.6}
+            onPress={() => {
+              onClose();
+              onToggleBlock();
+            }}
+          >
+            <Text style={[styles.rowText, { color: t.danger }]}>
+              {isBlocked ? "Unblock User" : "Block User"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Modal>
   );

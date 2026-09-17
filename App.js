@@ -23,7 +23,7 @@ import * as Updates from "expo-updates";
 import * as Notifications from "expo-notifications";
 import { API_BASE } from "./src/services/api";
 import { conversationService } from "./src/services/conversations";
-import { REPLY_ACTION_ID } from "./src/services/notifications";
+import { REPLY_ACTION_ID, refreshMutedConversationsCache } from "./src/services/notifications";
 
 // Web-only: hide the OS scrollbar so it doesn't clash with the app's own UI.
 if (Platform.OS === "web" && typeof document !== "undefined") {
@@ -45,6 +45,8 @@ import ConversationListScreen from "./src/screens/ConversationListScreen";
 import ChatScreen from "./src/screens/ChatScreen";
 import NewMessageScreen from "./src/screens/NewMessageScreen";
 import NewGroupScreen from "./src/screens/NewGroupScreen";
+import GroupInfoScreen from "./src/screens/GroupInfoScreen";
+import SharedMediaScreen from "./src/screens/SharedMediaScreen";
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
@@ -313,10 +315,31 @@ function useSilentOtaUpdates() {
   }, []);
 }
 
+// Keeps the in-memory muted-conversations cache (used by the notification
+// handler) fresh on launch and whenever the app returns to the foreground.
+function useMutedConversationsSync() {
+  React.useEffect(() => {
+    refreshMutedConversationsCache();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshMutedConversationsCache();
+    });
+    return () => subscription.remove();
+  }, []);
+}
+
 function AppNavigator() {
-  const { user, authLoading, login, theme: t, conversations } = useApp();
+  const {
+    user,
+    authLoading,
+    login,
+    theme: t,
+    conversations,
+    sessionExpiredMessage,
+    clearSessionExpiredMessage,
+  } = useApp();
   useSilentOtaUpdates();
   useNotificationNavigation(conversations);
+  useMutedConversationsSync();
 
   if (authLoading) {
     return (
@@ -339,7 +362,11 @@ function AppNavigator() {
       <>
         <StatusBar style={t.isDark ? "light" : "dark"} />
         <UpdateBanner />
-        <LoginScreen onLoginSuccess={login} />
+        <LoginScreen
+          onLoginSuccess={login}
+          initialError={sessionExpiredMessage}
+          onInitialErrorShown={clearSessionExpiredMessage}
+        />
       </>
     );
   }
@@ -368,6 +395,8 @@ function AppNavigator() {
         <Stack.Screen name="Chat" component={ChatScreen} />
         <Stack.Screen name="NewMessage" component={NewMessageScreen} />
         <Stack.Screen name="NewGroup" component={NewGroupScreen} />
+        <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
+        <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

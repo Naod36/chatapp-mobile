@@ -227,7 +227,11 @@ function FlowChatLogo({ theme }) {
   );
 }
 
-export default function LoginScreen({ onLoginSuccess }) {
+export default function LoginScreen({
+  onLoginSuccess,
+  initialError = null,
+  onInitialErrorShown,
+}) {
   const t = THEMES.dark;
   const insets = useSafeAreaInsets();
   const [reducedMotion, setReducedMotion] = useState(true);
@@ -254,7 +258,18 @@ export default function LoginScreen({ onLoginSuccess }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(initialError);
+  useEffect(() => {
+    if (initialError) onInitialErrorShown?.();
+    // Only meant to consume the initial value once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotStep, setForgotStep] = useState("request");
+  const [forgotMessage, setForgotMessage] = useState(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
 
   // Entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -411,6 +426,63 @@ export default function LoginScreen({ onLoginSuccess }) {
     }
   };
 
+  const handleOpenForgotPassword = () => {
+    setShowForgotPassword(true);
+    setForgotStep("request");
+    setForgotMessage(null);
+    setError(null);
+  };
+
+  const handleCancelForgotPassword = () => {
+    setShowForgotPassword(false);
+    setForgotStep("request");
+    setForgotMessage(null);
+    setResetEmail("");
+    setResetToken("");
+    setResetNewPassword("");
+    setError(null);
+  };
+
+  const handleForgotPasswordRequest = async () => {
+    if (loading) return;
+    if (!resetEmail.trim()) {
+      setError("Please enter your email address.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await authService.forgotPassword(resetEmail.trim());
+      setForgotMessage(
+        "If an account exists for that email, a reset token has been sent. Check your email and enter the token below.",
+      );
+      setForgotStep("reset");
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async () => {
+    if (loading) return;
+    if (!resetToken.trim() || !resetNewPassword.trim()) {
+      setError("Please enter the reset token and a new password.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await authService.resetPassword(resetToken.trim(), resetNewPassword);
+      setForgotMessage("Your password has been updated. You can sign in now.");
+      setForgotStep("done");
+    } catch (err) {
+      setError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderFormItem = (child, index) => {
     const anim = formItems[Math.min(index, formItems.length - 1)];
     return (
@@ -473,12 +545,26 @@ export default function LoginScreen({ onLoginSuccess }) {
           {renderFormItem(
             <View>
               <Text style={[styles.title, { color: t.text }]}>
-                {isSignUp ? "Create your account" : "Welcome back"}
+                {showForgotPassword
+                  ? forgotStep === "reset"
+                    ? "Enter reset token"
+                    : forgotStep === "done"
+                      ? "Password updated"
+                      : "Reset your password"
+                  : isSignUp
+                    ? "Create your account"
+                    : "Welcome back"}
               </Text>
               <Text style={[styles.subtitle, { color: t.textMuted }]}>
-                {isSignUp
-                  ? "A place for your conversations."
-                  : "Sign in to FlowChat."}
+                {showForgotPassword
+                  ? forgotStep === "reset"
+                    ? "Check your email for the reset token and enter it below."
+                    : forgotStep === "done"
+                      ? "You can sign in with your new password now."
+                      : "Enter your email and we'll send you a reset token."
+                  : isSignUp
+                    ? "A place for your conversations."
+                    : "Sign in to FlowChat."}
               </Text>
             </View>,
             formIndex++,
@@ -501,6 +587,173 @@ export default function LoginScreen({ onLoginSuccess }) {
               formIndex++,
             )}
 
+          {showForgotPassword && (
+            <View>
+              {forgotStep === "request" && (
+                <>
+                  <Text style={[styles.label, { color: t.text }]}>Email</Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: t.inputBorder,
+                        color: t.text,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    placeholder="Email address"
+                    placeholderTextColor={t.textMuted}
+                    value={resetEmail}
+                    onChangeText={setResetEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoCorrect={false}
+                    accessibilityLabel="Reset email"
+                    onSubmitEditing={handleForgotPasswordRequest}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.submitBtn,
+                      {
+                        backgroundColor: t.accent,
+                        opacity: loading ? 0.5 : 1,
+                      },
+                    ]}
+                    onPress={handleForgotPasswordRequest}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send reset link"
+                    accessibilityState={{ disabled: loading, busy: loading }}
+                    disabled={loading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.submitBtnText, { color: t.bg }]}>
+                      {loading ? "Sending..." : "Send reset link"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {forgotStep === "reset" && (
+                <>
+                  {forgotMessage && (
+                    <View
+                      accessibilityLiveRegion="polite"
+                      style={[
+                        styles.successBox,
+                        { borderColor: t.accent, backgroundColor: t.cardBg },
+                      ]}
+                    >
+                      <Text style={[styles.successText, { color: t.text }]}>
+                        {forgotMessage}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={[styles.label, { color: t.text }]}>
+                    Reset token
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: t.inputBorder,
+                        color: t.text,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    placeholder="Paste the token from your email"
+                    placeholderTextColor={t.textMuted}
+                    value={resetToken}
+                    onChangeText={setResetToken}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    accessibilityLabel="Reset token"
+                  />
+                  <Text style={[styles.label, { color: t.text }]}>
+                    New password
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: t.inputBorder,
+                        color: t.text,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    placeholder="New password"
+                    placeholderTextColor={t.textMuted}
+                    value={resetNewPassword}
+                    onChangeText={setResetNewPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="new-password"
+                    accessibilityLabel="New password"
+                    onSubmitEditing={handleResetPasswordSubmit}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.submitBtn,
+                      {
+                        backgroundColor: t.accent,
+                        opacity: loading ? 0.5 : 1,
+                      },
+                    ]}
+                    onPress={handleResetPasswordSubmit}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset password"
+                    accessibilityState={{ disabled: loading, busy: loading }}
+                    disabled={loading}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.submitBtnText, { color: t.bg }]}>
+                      {loading ? "Resetting..." : "Reset password"}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {forgotStep === "done" && forgotMessage && (
+                <View
+                  accessibilityLiveRegion="polite"
+                  style={[
+                    styles.successBox,
+                    { borderColor: t.accent, backgroundColor: t.cardBg },
+                  ]}
+                >
+                  <Text style={[styles.successText, { color: t.text }]}>
+                    {forgotMessage}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={handleCancelForgotPassword}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  forgotStep === "done"
+                    ? "Back to sign in"
+                    : "Cancel password reset"
+                }
+                style={styles.switchBtn}
+              >
+                <Text style={[styles.switchText, { color: t.textMuted }]}>
+                  <Text
+                    style={{
+                      color: t.text,
+                      fontWeight: "700",
+                      textDecorationLine: "underline",
+                    }}
+                  >
+                    Back to sign in
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {!showForgotPassword && (
+            <>
           {/* Google Sign In */}
           {renderFormItem(
             <TouchableOpacity
@@ -695,6 +948,23 @@ export default function LoginScreen({ onLoginSuccess }) {
             formIndex++,
           )}
 
+          {/* Forgot password link (login mode only) */}
+          {!isSignUp &&
+            renderFormItem(
+              <TouchableOpacity
+                onPress={handleOpenForgotPassword}
+                accessibilityRole="button"
+                accessibilityLabel="Forgot password?"
+                disabled={loading || googleLoading}
+                style={styles.forgotBtn}
+              >
+                <Text style={[styles.forgotText, { color: t.textMuted }]}>
+                  Forgot password?
+                </Text>
+              </TouchableOpacity>,
+              formIndex++,
+            )}
+
           {/* Switch mode */}
           {renderFormItem(
             <TouchableOpacity
@@ -722,6 +992,8 @@ export default function LoginScreen({ onLoginSuccess }) {
               </Text>
             </TouchableOpacity>,
             formIndex++,
+          )}
+            </>
           )}
         </Animated.View>
       </ScrollView>
@@ -910,5 +1182,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     fontWeight: "500",
+  },
+  forgotBtn: {
+    alignItems: "center",
+    paddingTop: 12,
+  },
+  forgotText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  successBox: {
+    borderWidth: 1.5,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  successText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 18,
   },
 });
