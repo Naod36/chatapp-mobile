@@ -59,6 +59,7 @@ function setupChatScreen() {
     "../services/conversations": {
       conversationService: { uploadFile: async () => ({ url: "/x" }) },
     },
+    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },

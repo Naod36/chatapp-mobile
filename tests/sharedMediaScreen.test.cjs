@@ -91,6 +91,9 @@ function setup({
       useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
     },
     "react-native-svg": { __esModule: true, default: "Svg", Path: "Path" },
+    "expo-video-thumbnails": {
+      getThumbnailAsync: async () => ({ uri: "file://thumb.jpg" }),
+    },
     "../context/AppContext": { useApp: () => appState },
     "../services/conversations": {
       conversationService: { getMessages },

@@ -161,6 +161,12 @@ function setup({ getProfile, updateProfile } = {}) {
     },
     "../services/user": { userService },
     "../services/api": { API_BASE: "http://test.invalid" },
+    "../components/common/BiometricLock.js": {
+      isBiometricAvailable: async () => false,
+      isBiometricLockEnabled: async () => false,
+      setBiometricLockEnabled: async () => {},
+      authenticate: async () => ({ success: true }),
+    },
   };
   const AccountPanel = loadAccountPanel(runner, mocks);
   return { runner, AccountPanel, userService, updateCalls };

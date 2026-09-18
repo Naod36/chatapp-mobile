@@ -41,6 +41,12 @@ import ConfirmDialog from "../components/common/ConfirmDialog";
 import otaConfig from "../config/otaVersion.json";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
+import {
+  isBiometricAvailable,
+  isBiometricLockEnabled,
+  setBiometricLockEnabled,
+  authenticate,
+} from "../components/common/BiometricLock.js";
 import { API_BASE } from "../services/api";
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
@@ -256,6 +262,8 @@ function AccountPanel({
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [notifSaving, setNotifSaving] = useState(false);
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -448,6 +456,30 @@ function AccountPanel({
       );
     } finally {
       setNotifSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    isBiometricAvailable().then(setBiometricSupported);
+    isBiometricLockEnabled().then(setBiometricEnabled);
+  }, []);
+
+  const handleToggleBiometric = async (value) => {
+    if (value) {
+      // Confirm the user can actually pass the check before locking them in.
+      try {
+        const result = await authenticate("Confirm to enable Biometric Lock");
+        if (!result?.success) return;
+      } catch {
+        return;
+      }
+    }
+    setBiometricEnabled(value);
+    try {
+      await setBiometricLockEnabled(value);
+    } catch (e) {
+      setBiometricEnabled(!value);
+      Alert.alert("Error", e.message || "Failed to update Biometric Lock");
     }
   };
 
@@ -898,6 +930,34 @@ function AccountPanel({
                     { backgroundColor: t.cardBg, borderColor: t.borderColor },
                   ]}
                 >
+                  {biometricSupported && (
+                    <View style={styles.settingsRow}>
+                      <View style={styles.settingsRowLeft}>
+                        <Text
+                          style={[styles.settingsRowText, { color: t.text }]}
+                        >
+                          Biometric Lock
+                        </Text>
+                        <Text
+                          style={[
+                            styles.settingsRowHint,
+                            { color: t.textMuted },
+                          ]}
+                        >
+                          Require unlock after leaving the app
+                        </Text>
+                      </View>
+                      <Switch
+                        accessibilityRole="switch"
+                        accessibilityLabel="Biometric Lock"
+                        accessibilityState={{ checked: biometricEnabled }}
+                        value={biometricEnabled}
+                        onValueChange={handleToggleBiometric}
+                        trackColor={{ false: t.borderColor, true: t.accent }}
+                        thumbColor="#fff"
+                      />
+                    </View>
+                  )}
                   <TouchableOpacity
                     onPress={() => setShowPasswordForm((v) => !v)}
                     style={styles.settingsRow}

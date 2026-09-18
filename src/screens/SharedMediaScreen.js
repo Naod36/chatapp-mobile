@@ -8,9 +8,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import { useApp } from "../context/AppContext";
 import { conversationService } from "../services/conversations";
 import { API_BASE } from "../services/api";
@@ -60,6 +62,54 @@ function getAssetUrl(url) {
   )
     return url;
   return `${API_BASE}${url}`;
+}
+
+function PlayIcon({ color = "#fff" }) {
+  return (
+    <Svg width="22" height="22" viewBox="0 0 24 24" fill={color}>
+      <Path d="M8 5v14l11-7z" />
+    </Svg>
+  );
+}
+
+// Grid tile for a video message: generates a frame thumbnail on mount and
+// falls back to a plain dark tile with a play icon when generation fails
+// (e.g. web, or an older binary without the native module).
+export function VideoThumb({ uri, onPress }) {
+  const [thumbUri, setThumbUri] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (Platform.OS === "web" || !uri) return undefined;
+    try {
+      VideoThumbnails.getThumbnailAsync(uri, { time: 1000 })
+        .then((result) => {
+          if (!cancelled && result?.uri) setThumbUri(result.uri);
+        })
+        .catch(() => {});
+    } catch {}
+    return () => {
+      cancelled = true;
+    };
+  }, [uri]);
+
+  return (
+    <TouchableOpacity
+      style={styles.thumbWrap}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel="Play video"
+      onPress={onPress}
+    >
+      {thumbUri ? (
+        <Image source={{ uri: thumbUri }} style={styles.thumb} resizeMode="cover" />
+      ) : (
+        <View style={[styles.thumb, styles.videoPlaceholder]} />
+      )}
+      <View style={styles.playOverlay} pointerEvents="none">
+        <PlayIcon />
+      </View>
+    </TouchableOpacity>
+  );
 }
 
 /**
@@ -124,6 +174,14 @@ export default function SharedMediaScreen({ route, navigation }) {
     [visibleMessages],
   );
 
+  const videoMessages = useMemo(
+    () =>
+      visibleMessages.filter(
+        (m) => m.message_type === "video" && (m.media_url || m.file_url),
+      ),
+    [visibleMessages],
+  );
+
   const openFile = useCallback((item) => {
     const url = getAssetUrl(item.media_url || item.file_url);
     if (url) Linking.openURL(url).catch(() => {});
@@ -149,7 +207,10 @@ export default function SharedMediaScreen({ route, navigation }) {
   );
 
   const isEmpty =
-    !loading && imageMessages.length === 0 && fileMessages.length === 0;
+    !loading &&
+    imageMessages.length === 0 &&
+    fileMessages.length === 0 &&
+    videoMessages.length === 0;
 
   return (
     <View style={[styles.container, { backgroundColor: t.bg }]}>
@@ -206,6 +267,22 @@ export default function SharedMediaScreen({ route, navigation }) {
           }
           ListFooterComponent={
             <View style={styles.filesSection}>
+              {videoMessages.length > 0 && (
+                <>
+                  <Text style={[styles.sectionHeader, { color: t.textMuted }]}>
+                    Videos ({videoMessages.length})
+                  </Text>
+                  <View style={styles.videoGrid}>
+                    {videoMessages.map((item, idx) => (
+                      <VideoThumb
+                        key={String(item.id || item.message_id || idx)}
+                        uri={getAssetUrl(item.media_url || item.file_url)}
+                        onPress={() => openFile(item)}
+                      />
+                    ))}
+                  </View>
+                </>
+              )}
               <Text style={[styles.sectionHeader, { color: t.textMuted }]}>
                 Files ({fileMessages.length})
               </Text>
@@ -287,6 +364,22 @@ const styles = StyleSheet.create({
   thumb: {
     flex: 1,
     borderRadius: 2,
+  },
+  videoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  videoPlaceholder: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  playOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   filesSection: { paddingBottom: 12 },
   fileRow: {

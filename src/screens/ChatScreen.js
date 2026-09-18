@@ -38,6 +38,7 @@ import TypingIndicator from "../components/chat/TypingIndicator";
 import FullScreenImageViewer from "../components/chat/FullScreenImageViewer";
 import ContextMenu from "../components/chat/ContextMenu";
 import { redactMessage } from "../utils/blockPolicy";
+import { lightTap, selectionTap, successTap } from "../utils/haptics.js";
 
 function getAssetUrl(url) {
   if (!url) return null;
@@ -390,6 +391,7 @@ export default function ChatScreen({ route, navigation }) {
   const handleToggleReaction = useCallback(
     (msg, emoji) => {
       if (!canInteract()) return;
+      selectionTap();
       const msgId = String(msg.id || msg.message_id);
       toggleReaction(msgId, emoji);
     },
@@ -427,6 +429,7 @@ export default function ChatScreen({ route, navigation }) {
 
   // ─── Context Menu Handlers ────────────────────────────────────────────────
   const openContextMenu = useCallback((msg) => {
+    lightTap();
     setSelectedMsg(msg);
     setContextMenuVisible(true);
   }, []);
@@ -439,6 +442,7 @@ export default function ChatScreen({ route, navigation }) {
   const beginReply = useCallback(
     (message) => {
       if (!message || !canInteract()) return;
+      lightTap();
       setEditingMessage(null);
       setReplyingTo(message);
       closeContextMenu();
@@ -693,6 +697,7 @@ export default function ChatScreen({ route, navigation }) {
       setAttachment(null);
       setReplyingTo(null);
       AsyncStorage.removeItem(draftKey).catch(() => {});
+      successTap();
     } catch (error) {
       Alert.alert(
         "Message not sent",

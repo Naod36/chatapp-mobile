@@ -189,6 +189,7 @@ function setupChatScreen({ blocked = false } = {}) {
         },
       },
     },
+    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },

@@ -40,6 +40,7 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 }
 
 import { AppProvider, useApp } from "./src/context/AppContext";
+import BiometricLockGate from "./src/components/common/BiometricLock.js";
 import LoginScreen from "./src/screens/LoginScreen";
 import ConversationListScreen from "./src/screens/ConversationListScreen";
 import ChatScreen from "./src/screens/ChatScreen";
@@ -398,6 +399,7 @@ function AppNavigator() {
         <Stack.Screen name="GroupInfo" component={GroupInfoScreen} />
         <Stack.Screen name="SharedMedia" component={SharedMediaScreen} />
       </Stack.Navigator>
+      <BiometricLockGate theme={t} />
     </NavigationContainer>
   );
 }
