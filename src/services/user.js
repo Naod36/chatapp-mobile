@@ -1,6 +1,12 @@
 import { apiFetch } from "./api";
 
 export const userService = {
+  async updatePresence(preferences) {
+    return apiFetch("/users/me/presence", {
+      method: "PUT",
+      body: JSON.stringify(preferences),
+    });
+  },
   async getProfile() {
     return apiFetch("/me");
   },

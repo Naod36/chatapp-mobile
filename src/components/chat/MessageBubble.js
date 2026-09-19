@@ -106,6 +106,7 @@ function MessageBubble({
   onReplyPress,
   suppressReceipts = false,
   interactionsDisabled = false,
+  highlighted = false,
 }) {
   const { isBlockedBy, blockStateReady } = useApp();
   const hiddenSender =
@@ -204,6 +205,8 @@ function MessageBubble({
               styles.bubble,
               {
                 backgroundColor: bubbleBg,
+                borderWidth: 2,
+                borderColor: highlighted ? t.accent : "transparent",
                 borderTopLeftRadius: 18,
                 borderTopRightRadius: 18,
                 borderBottomRightRadius: isOwn ? 4 : 18,

@@ -23,7 +23,10 @@ import * as Updates from "expo-updates";
 import * as Notifications from "expo-notifications";
 import { API_BASE } from "./src/services/api";
 import { conversationService } from "./src/services/conversations";
-import { REPLY_ACTION_ID, refreshMutedConversationsCache } from "./src/services/notifications";
+import {
+  REPLY_ACTION_ID,
+  refreshMutedConversationsCache,
+} from "./src/services/notifications";
 
 // Web-only: hide the OS scrollbar so it doesn't clash with the app's own UI.
 if (Platform.OS === "web" && typeof document !== "undefined") {
@@ -41,6 +44,7 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 
 import { AppProvider, useApp } from "./src/context/AppContext";
 import BiometricLockGate from "./src/components/common/BiometricLock.js";
+import NoticeHost from "./src/components/common/NoticeHost";
 import LoginScreen from "./src/screens/LoginScreen";
 import ConversationListScreen from "./src/screens/ConversationListScreen";
 import ChatScreen from "./src/screens/ChatScreen";
@@ -410,6 +414,7 @@ export default function App() {
       <SafeAreaProvider>
         <AppProvider>
           <AppNavigator />
+          <NoticeHost />
         </AppProvider>
       </SafeAreaProvider>
     </ErrorBoundary>

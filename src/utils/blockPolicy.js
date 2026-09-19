@@ -42,6 +42,10 @@ function redactUser(person, isHidden) {
     avatar: null,
     status: "offline",
     last_seen: null,
+    custom_status: "",
+    status_emoji: "",
+    status_expires_at: null,
+    presence_visibility: "invisible",
     bio: null,
   };
 }

@@ -268,6 +268,7 @@ function setupChatScreen({
     },
   });
   const mocks = {
+    "../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "react-native-svg": { __esModule: true, default: "Svg", Path: "Path" },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
@@ -321,7 +322,11 @@ function setupChatScreen({
     "../services/conversations": {
       conversationService: { uploadFile: async () => ({ url: "/x" }) },
     },
-    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
+    "../utils/haptics.js": {
+      lightTap() {},
+      selectionTap() {},
+      successTap() {},
+    },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },
@@ -527,7 +532,10 @@ test("a failed message offers Retry Send, Copy Text and Discard only", () => {
   assert.ok(labels.includes("Discard"));
   assert.ok(labels.includes("Copy Text"));
   for (const absent of ["Reply", "Edit Message", "Pin Message", "Delete"]) {
-    assert.ok(!labels.includes(absent), `${absent} should be hidden for failed`);
+    assert.ok(
+      !labels.includes(absent),
+      `${absent} should be hidden for failed`,
+    );
   }
   const press = (label) =>
     nodes(tree)

@@ -413,7 +413,11 @@ test("AppContext refreshes on event, reconnect, foreground and 12-second polling
         closeAll() {},
       },
     },
-    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
+    "../utils/haptics.js": {
+      lightTap() {},
+      selectionTap() {},
+      successTap() {},
+    },
     "../services/notifications": {
       registerForPushNotificationsAsync: async () => null,
       registerPushToken() {},
@@ -649,6 +653,7 @@ test("ChatScreen aborts uploads on a block, prevents the follow-up send and gate
     Keyboard: { addListener: () => ({ remove() {} }) },
   });
   const mocks = {
+    "../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "react-native-svg": { __esModule: true, default: "Svg", Path: "Path" },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
@@ -676,7 +681,11 @@ test("ChatScreen aborts uploads on a block, prevents the follow-up send and gate
         },
       },
     },
-    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
+    "../utils/haptics.js": {
+      lightTap() {},
+      selectionTap() {},
+      successTap() {},
+    },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },

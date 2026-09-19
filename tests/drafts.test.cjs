@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { harness, nodes, settle } = require("./helpers.cjs");
 
-function setupChatScreen(storeInitial = {}) {
+function setupChatScreen(storeInitial = {}, messages = []) {
   const runner = harness();
   const store = { ...storeInitial };
   const conversation = {
@@ -37,10 +37,11 @@ function setupChatScreen(storeInitial = {}) {
     Platform: { OS: "android" },
     Alert: { alert: () => {} },
     Clipboard: { setString() {} },
-    Keyboard: { addListener: () => ({ remove() {} }) },
+    Keyboard: { addListener: () => ({ remove() {} }), dismiss() {} },
     Share: { share: async () => {} },
   });
   const mocks = {
+    "react-native-safe-area-context": { SafeAreaView: "SafeAreaView" },
     "react-native": native,
     "react-native-svg": { __esModule: true, default: "Svg", Path: "Path" },
     "@react-native-async-storage/async-storage": {
@@ -56,7 +57,7 @@ function setupChatScreen(storeInitial = {}) {
     "../services/api": { API_BASE: "http://test.invalid" },
     "../hooks/useMessages": {
       useMessages: () => ({
-        messages: [],
+        messages,
         pinnedMessages: [],
         typingUser: null,
         sendMessage: async () => {},
@@ -66,7 +67,11 @@ function setupChatScreen(storeInitial = {}) {
     "../services/conversations": {
       conversationService: { uploadFile: async () => ({ url: "/x" }) },
     },
-    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
+    "../utils/haptics.js": {
+      lightTap() {},
+      selectionTap() {},
+      successTap() {},
+    },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },
@@ -123,6 +128,81 @@ function setupChatScreen(storeInitial = {}) {
 }
 
 const DRAFT_KEY = "@flowchat_draft_me_chat";
+
+test("search controls have independent 48px targets, cycle matches and preserve drafts", async () => {
+  const fixture = setupChatScreen({ [DRAFT_KEY]: "keep me" }, [
+    { id: "one", content: "hello first" },
+    { id: "two", content: "hello second" },
+  ]);
+  fixture.render();
+  await settle();
+  nodes(fixture.render())
+    .find((node) => node.type === "ChatHeader")
+    .props.onSearchPress();
+  const control = (label) =>
+    nodes(fixture.render()).find(
+      (node) => node.props.accessibilityLabel === label,
+    );
+  assert.equal(control("Next match").props.disabled, true);
+  assert.equal(fixture.input(fixture.render()), undefined);
+  assert.equal(
+    nodes(fixture.render()).some((node) => node.type === "ChatHeader"),
+    false,
+  );
+  control("Search messages").props.onChangeText("hello");
+  for (const label of ["Previous match", "Next match", "Close search"]) {
+    const style = control(label).props.style;
+    const dimensions = Array.isArray(style) ? style[0] : style;
+    assert.equal(dimensions.width, 48);
+    assert.equal(dimensions.height, 48);
+  }
+  const counter = () =>
+    nodes(fixture.render()).find(
+      (node) => node.props.accessibilityLiveRegion === "polite",
+    ).props.children[0];
+  assert.equal(counter(), "1 of 2");
+  const messageList = nodes(fixture.render()).find(
+    (node) => node.type === "FlatList",
+  );
+  const scrolls = [];
+  messageList.props.ref.current = {
+    scrollToEnd() {},
+    scrollToOffset: (options) => scrolls.push(["offset", options.offset]),
+    scrollToIndex: (options) => scrolls.push(["index", options.index]),
+  };
+  messageList.props.onScrollToIndexFailed({ index: 1, averageItemLength: 80 });
+  fixture.fireTimers();
+  assert.deepEqual(scrolls, [
+    ["offset", 80],
+    ["index", 1],
+  ]);
+  control("Next match").props.onPress();
+  assert.equal(counter(), "2 of 2");
+  control("Next match").props.onPress();
+  assert.equal(counter(), "1 of 2");
+  control("Previous match").props.onPress();
+  assert.equal(counter(), "2 of 2");
+  control("Show as List").props.onPress();
+  const results = nodes(fixture.render()).find(
+    (node) => node.props.accessibilityLabel === "Search results",
+  );
+  assert.equal(results.props.data.length, 2);
+  results.props
+    .renderItem({ item: results.props.data[0], index: 0 })
+    .props.onPress();
+  assert.equal(counter(), "1 of 2");
+  assert.equal(control("Search results"), undefined);
+  control("Clear search").props.onPress();
+  assert.equal(control("Search messages").props.value, "");
+  assert.ok(control("Close search"));
+  control("Search messages").props.onChangeText("missing");
+  assert.equal(counter(), "No matches");
+  assert.equal(control("Previous match").props.disabled, true);
+  control("Close search").props.onPress();
+  assert.equal(control("Next match"), undefined);
+  assert.equal(fixture.input(fixture.render()).props.value, "keep me");
+  fixture.runner.unmount();
+});
 
 test("typed text is saved as a per-conversation draft after the debounce", async () => {
   const fixture = setupChatScreen();

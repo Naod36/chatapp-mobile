@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { conversationService } from "../services/conversations";
 import { apiFetch } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -27,6 +27,61 @@ export function useConversations() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [openingSavedMessages, setOpeningSavedMessages] = useState(false);
+  const savedRequestRef = useRef(null);
+  const accountRef = useRef(user);
+  accountRef.current = user;
+
+  const openSavedMessages = useCallback(async () => {
+    if (savedRequestRef.current) return null;
+    const accountId = user?.userId || user?.user_id;
+    if (!accountId || !user?.token) throw new Error("Please sign in again.");
+    const request = {};
+    savedRequestRef.current = request;
+    setOpeningSavedMessages(true);
+    try {
+      const existing = conversations.find(
+        (conversation) =>
+          conversation.type === "direct" &&
+          !conversation.other_participant &&
+          (conversation.id || conversation.conversation_id) &&
+          conversation.id !== "virtual-saved-messages",
+      );
+      const result = existing
+        ? { conversation_id: existing.id || existing.conversation_id }
+        : await conversationService.createConversation(accountId);
+      if (
+        accountRef.current?.token !== user.token ||
+        (accountRef.current?.userId || accountRef.current?.user_id) !==
+          accountId
+      )
+        return null;
+      if (!result?.conversation_id)
+        throw new Error("Could not open Saved Messages. Please try again.");
+      const conversation = existing || {
+        id: result.conversation_id,
+        conversation_id: result.conversation_id,
+        type: "direct",
+        display_name: "Saved Messages",
+        other_participant: null,
+        unread_count: 0,
+      };
+      setConversations((previous) =>
+        previous.some(
+          (entry) =>
+            String(entry.id || entry.conversation_id) ===
+            String(result.conversation_id),
+        )
+          ? previous
+          : [conversation, ...previous],
+      );
+      setSearchQuery("");
+      return conversation;
+    } finally {
+      savedRequestRef.current = null;
+      setOpeningSavedMessages(false);
+    }
+  }, [conversations, user, setConversations]);
 
   // ─── User search ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -111,6 +166,8 @@ export function useConversations() {
     ),
     isSearching,
     startConversation,
+    openSavedMessages,
+    openingSavedMessages,
     typingMap,
     presenceMap,
   };

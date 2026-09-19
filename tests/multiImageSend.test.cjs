@@ -22,6 +22,7 @@ function messageInputMocks({ launchImageLibraryAsync, alerts = [] } = {}) {
     Alert: { alert: (...args) => alerts.push(args) },
   });
   return {
+    "../../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "react-native-svg": {
       __esModule: true,
@@ -160,6 +161,7 @@ function setupChatScreen({ blocked = false } = {}) {
     Share: { share: async () => {} },
   });
   const mocks = {
+    "../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "react-native-svg": { __esModule: true, default: "Svg", Path: "Path" },
     "@react-native-async-storage/async-storage": { getItem: async () => null },
@@ -189,7 +191,11 @@ function setupChatScreen({ blocked = false } = {}) {
         },
       },
     },
-    "../utils/haptics.js": { lightTap() {}, selectionTap() {}, successTap() {} },
+    "../utils/haptics.js": {
+      lightTap() {},
+      selectionTap() {},
+      successTap() {},
+    },
     "../services/notifications": {
       refreshMutedConversationsCache: () => {},
     },

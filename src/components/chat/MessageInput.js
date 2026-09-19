@@ -9,10 +9,10 @@ import {
   Image,
   Modal,
   TouchableWithoutFeedback,
-  Alert,
   ActivityIndicator,
   Keyboard,
 } from "react-native";
+import * as Alert from "../../services/notices";
 import Svg, { Path, Line, Circle } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";

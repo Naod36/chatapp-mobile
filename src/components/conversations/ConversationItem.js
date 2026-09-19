@@ -65,6 +65,9 @@ function ConversationItem({
     !isGroup &&
     !isSaved &&
     !blocked &&
+    presenceStatus !== "hidden" &&
+    otherUser?.presence_visibility !== "invisible" &&
+    otherUser?.status !== "hidden" &&
     (presenceStatus === "online" ||
       otherUser?.status === "online" ||
       c.status === "online");

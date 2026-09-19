@@ -9,7 +9,6 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Animated,
   Platform,
   Modal,
@@ -20,6 +19,7 @@ import {
   Switch,
   useWindowDimensions,
 } from "react-native";
+import * as Alert from "../services/notices";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -38,6 +38,7 @@ import ConversationItem from "../components/conversations/ConversationItem";
 import EmptyState from "../components/conversations/EmptyState";
 import Avatar from "../components/common/Avatar";
 import ConfirmDialog from "../components/common/ConfirmDialog";
+import PresenceSettings from "../components/common/PresenceSettings";
 import otaConfig from "../config/otaVersion.json";
 import { conversationService } from "../services/conversations";
 import { userService } from "../services/user";
@@ -48,6 +49,7 @@ import {
   authenticate,
 } from "../components/common/BiometricLock.js";
 import { API_BASE } from "../services/api";
+import { isFolderSwipe, swipedFolder } from "../utils/folderSwipe";
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -207,6 +209,8 @@ function AccountPanel({
   theme: t,
   onLogout,
   onProfileUpdated,
+  onSavedMessages,
+  openingSavedMessages,
 }) {
   const {
     unblockUser,
@@ -745,6 +749,38 @@ function AccountPanel({
               </Text>
             </View>
 
+            <TouchableOpacity
+              onPress={onSavedMessages}
+              disabled={openingSavedMessages}
+              accessibilityRole="button"
+              accessibilityLabel="Saved Messages"
+              accessibilityState={{
+                disabled: openingSavedMessages,
+                busy: openingSavedMessages,
+              }}
+              style={[
+                styles.savedMessagesRow,
+                { borderBottomColor: t.borderColor },
+              ]}
+            >
+              <Avatar name="Saved Messages" isSaved size={36} />
+              <Text
+                style={{
+                  flex: 1,
+                  fontSize: 16,
+                  fontWeight: "600",
+                  color: t.text,
+                }}
+              >
+                Saved Messages
+              </Text>
+              {openingSavedMessages ? (
+                <ActivityIndicator color={t.accent} size="small" />
+              ) : (
+                <ChevronRightIcon color={t.textMuted} />
+              )}
+            </TouchableOpacity>
+
             {loading ? (
               <ActivityIndicator color={t.accent} style={{ marginTop: 24 }} />
             ) : (
@@ -756,8 +792,10 @@ function AccountPanel({
                   </Text>
                 )}
 
+                <PresenceSettings theme={t} visible={visible} />
+
                 {/* Profile group */}
-                <Text style={[styles.groupLabel, { color: t.textMuted }]}>
+                <Text style={[styles.groupLabel, { color: t.accent }]}>
                   Profile
                 </Text>
                 <View
@@ -820,9 +858,7 @@ function AccountPanel({
                   />
                   <View style={styles.settingsRow}>
                     <View style={styles.settingsRowTextCol}>
-                      <Text
-                        style={[styles.settingsRowText, { color: t.text }]}
-                      >
+                      <Text style={[styles.settingsRowText, { color: t.text }]}>
                         Public Search Visibility
                       </Text>
                       <Text
@@ -854,7 +890,7 @@ function AccountPanel({
                 <Text
                   style={[
                     styles.groupLabel,
-                    { color: t.textMuted, marginTop: 20 },
+                    { color: t.accent, marginTop: 20 },
                   ]}
                 >
                   Preferences
@@ -919,7 +955,7 @@ function AccountPanel({
                 <Text
                   style={[
                     styles.groupLabel,
-                    { color: t.textMuted, marginTop: 20 },
+                    { color: t.accent, marginTop: 20 },
                   ]}
                 >
                   Privacy &amp; Security
@@ -932,7 +968,7 @@ function AccountPanel({
                 >
                   {biometricSupported && (
                     <View style={styles.settingsRow}>
-                      <View style={styles.settingsRowLeft}>
+                      <View style={styles.settingsRowTextCol}>
                         <Text
                           style={[styles.settingsRowText, { color: t.text }]}
                         >
@@ -1169,7 +1205,7 @@ function AccountPanel({
                 <Text
                   style={[
                     styles.groupLabel,
-                    { color: t.textMuted, marginTop: 20 },
+                    { color: t.accent, marginTop: 20 },
                   ]}
                 >
                   Session
@@ -1201,7 +1237,7 @@ function AccountPanel({
                 <Text
                   style={[
                     styles.groupLabel,
-                    { color: t.textMuted, marginTop: 20 },
+                    { color: t.accent, marginTop: 20 },
                   ]}
                 >
                   Danger Zone
@@ -1466,6 +1502,8 @@ export default function ConversationListScreen({ navigation }) {
     searchResults,
     isSearching,
     startConversation,
+    openSavedMessages,
+    openingSavedMessages,
     typingMap,
     presenceMap,
     loadConversations,
@@ -1476,6 +1514,22 @@ export default function ConversationListScreen({ navigation }) {
   const [pinnedConversationIds, setPinnedConversationIds] = useState([]);
   const [mutedConversationIds, setMutedConversationIds] = useState([]);
   const [selectedFolderId, setSelectedFolderId] = useState("all");
+  const folderOffsets = useRef({});
+  const folderPan = PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_, gesture) =>
+      !accountOpen && !searchQuery.trim() && isFolderSwipe(gesture),
+    onPanResponderRelease: (_, gesture) => {
+      if (accountOpen || searchQuery.trim()) return;
+      setSelectedFolderId((selected) =>
+        swipedFolder(
+          CONVERSATION_FOLDERS.map((folder) => folder.id),
+          selected,
+          gesture,
+        ),
+      );
+    },
+    onPanResponderTerminationRequest: () => true,
+  });
 
   useEffect(() => {
     userService
@@ -1527,6 +1581,20 @@ export default function ConversationListScreen({ navigation }) {
     [startConversation, navigation, setSearchQuery],
   );
 
+  const handleSavedMessages = useCallback(async () => {
+    try {
+      const conversation = await openSavedMessages();
+      if (!conversation) return;
+      setAccountOpen(false);
+      navigation.navigate("Chat", { conversation });
+    } catch (error) {
+      Alert.alert(
+        "Saved Messages",
+        error.message || "Could not open Saved Messages. Please try again.",
+      );
+    }
+  }, [openSavedMessages, navigation]);
+
   const handleLogout = useCallback(() => {
     logout().catch((err) => console.warn("Logout error:", err));
   }, [logout]);
@@ -1567,6 +1635,7 @@ export default function ConversationListScreen({ navigation }) {
           selectedId={selectedFolderId}
           onSelect={setSelectedFolderId}
           theme={t}
+          conversations={conversations}
         />
       )}
 
@@ -1608,44 +1677,55 @@ export default function ConversationListScreen({ navigation }) {
           contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         />
       ) : (
-        <FlatList
-          key={selectedFolderId}
-          data={visibleConversations}
-          extraData={typingMap}
-          keyExtractor={(item) => String(item.id || item.conversation_id)}
-          renderItem={({ item }) => {
-            const cid = String(item.id || item.conversation_id || "");
-            return (
-              <ConversationItem
-                conversation={item}
-                isPinned={pinnedConversationIds.includes(cid)}
-                isMuted={mutedConversationIds.includes(cid)}
-                onPress={() => handleSelectConversation(item)}
-                isTyping={Boolean(typingMap[cid])}
+        <View style={{ flex: 1 }} {...folderPan.panHandlers}>
+          <FlatList
+            key={selectedFolderId}
+            contentOffset={{
+              x: 0,
+              y: folderOffsets.current[selectedFolderId] || 0,
+            }}
+            onScroll={({ nativeEvent }) => {
+              folderOffsets.current[selectedFolderId] =
+                nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+            data={visibleConversations}
+            extraData={typingMap}
+            keyExtractor={(item) => String(item.id || item.conversation_id)}
+            renderItem={({ item }) => {
+              const cid = String(item.id || item.conversation_id || "");
+              return (
+                <ConversationItem
+                  conversation={item}
+                  isPinned={pinnedConversationIds.includes(cid)}
+                  isMuted={mutedConversationIds.includes(cid)}
+                  onPress={() => handleSelectConversation(item)}
+                  isTyping={Boolean(typingMap[cid])}
+                />
+              );
+            }}
+            ListEmptyComponent={
+              syncState === "connecting" ? null : selectedFolder?.emptyText ? (
+                <Text style={[styles.searchingText, { color: t.textMuted }]}>
+                  {selectedFolder.emptyText}
+                </Text>
+              ) : (
+                <EmptyState theme={t} />
+              )
+            }
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={t.accent}
+                colors={[t.accent]}
+                progressBackgroundColor={t.bg}
               />
-            );
-          }}
-          ListEmptyComponent={
-            syncState === "connecting" ? null : selectedFolder?.emptyText ? (
-              <Text style={[styles.searchingText, { color: t.textMuted }]}>
-                {selectedFolder.emptyText}
-              </Text>
-            ) : (
-              <EmptyState theme={t} />
-            )
-          }
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              tintColor={t.accent}
-              colors={[t.accent]}
-              progressBackgroundColor={t.bg}
-            />
-          }
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
-        />
+            }
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
+          />
+        </View>
       )}
 
       <BottomDock theme={t} navigation={navigation} />
@@ -1656,6 +1736,8 @@ export default function ConversationListScreen({ navigation }) {
         theme={t}
         onLogout={handleLogout}
         onProfileUpdated={setMyProfile}
+        onSavedMessages={handleSavedMessages}
+        openingSavedMessages={openingSavedMessages}
       />
     </View>
   );
@@ -1665,6 +1747,15 @@ export default function ConversationListScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  savedMessagesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 56,
+    gap: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1809,9 +1900,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sheetTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    letterSpacing: 0.3,
+    fontSize: 20,
+    fontWeight: "600",
+    letterSpacing: 0,
   },
   closeBtn: {
     fontSize: 18,
@@ -1862,11 +1953,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   groupLabel: {
-    fontSize: 11.5,
-    fontWeight: "700",
-    letterSpacing: 0.7,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: 0,
     marginBottom: 8,
-    textTransform: "uppercase",
   },
   groupCard: {
     borderWidth: 1,
@@ -1881,12 +1971,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   groupRowLabel: {
-    fontSize: 11.5,
+    fontSize: 14,
     fontWeight: "600",
     marginBottom: 3,
   },
   groupInput: {
-    fontSize: 15,
+    fontSize: 16,
     padding: 0,
     margin: 0,
   },
@@ -1908,30 +1998,39 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
+    minHeight: 56,
     paddingHorizontal: 14,
     paddingVertical: 13,
   },
   settingsRowLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
   settingsRowText: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: "400",
+    flexShrink: 1,
   },
   settingsRowHint: {
-    fontSize: 11.5,
+    fontSize: 14,
+    lineHeight: 20,
     marginTop: 2,
   },
   settingsRowTextCol: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "column",
     gap: 2,
     flexShrink: 1,
-    paddingRight: 10,
   },
   settingsRowSubtext: {
-    fontSize: 12,
+    fontSize: 14,
+    lineHeight: 20,
   },
   inlineFormWrap: {
     paddingHorizontal: 14,

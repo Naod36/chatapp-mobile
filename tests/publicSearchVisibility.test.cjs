@@ -49,15 +49,22 @@ function loadAccountPanel(runner, mocks) {
     },
     { filename },
   );
-  return module.exports.AccountPanel;
+  return module.exports;
 }
 
-function setup({ getProfile, updateProfile } = {}) {
+function setup({
+  getProfile,
+  updateProfile,
+  openSavedMessages,
+  biometricSupported = false,
+} = {}) {
   const runner = harness();
   const updateCalls = [];
+  const alerts = [];
   const userService = {
     getProfile:
-      getProfile || (async () => ({ display_name: "Ann", bio: "", is_public: true })),
+      getProfile ||
+      (async () => ({ display_name: "Ann", bio: "", is_public: true })),
     updateProfile:
       updateProfile ||
       (async (data) => {
@@ -87,7 +94,7 @@ function setup({ getProfile, updateProfile } = {}) {
   );
   Object.assign(native, {
     StyleSheet: { create: (styles) => styles },
-    Alert: { alert: () => {} },
+    Alert: { alert: (...args) => alerts.push(args) },
     Platform: { OS: "ios" },
     Animated: {
       View: "AnimatedView",
@@ -98,10 +105,13 @@ function setup({ getProfile, updateProfile } = {}) {
       timing: () => ({ start: (cb) => cb && cb() }),
       spring: () => ({ start: (cb) => cb && cb() }),
     },
-    PanResponder: { create: () => ({ panHandlers: {} }) },
+    PanResponder: {
+      create: (handlers) => ({ panHandlers: { testPanHandlers: handlers } }),
+    },
     useWindowDimensions: () => ({ height: 800, width: 400 }),
   });
   const mocks = {
+    "../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "@react-native-async-storage/async-storage": { getItem: async () => null },
     "@react-navigation/native": { useFocusEffect: () => {} },
@@ -124,6 +134,7 @@ function setup({ getProfile, updateProfile } = {}) {
     },
     "../context/AppContext": {
       useApp: () => ({
+        theme: {},
         unblockUser: async () => {},
         isBlockedBy: () => false,
         blockedUserIds: [],
@@ -132,7 +143,14 @@ function setup({ getProfile, updateProfile } = {}) {
         changeTheme: () => {},
       }),
     },
-    "../hooks/useConversations": { useConversations: () => ({}) },
+    "../hooks/useConversations": {
+      useConversations: () => ({
+        conversations: [],
+        searchQuery: "",
+        openSavedMessages,
+        openingSavedMessages: false,
+      }),
+    },
     "../components/conversations/ConversationHeader": {
       __esModule: true,
       default: "ConversationHeader",
@@ -140,7 +158,9 @@ function setup({ getProfile, updateProfile } = {}) {
     "../components/conversations/ConversationFolders": {
       __esModule: true,
       default: "ConversationFolders",
-      CONVERSATION_FOLDERS: [],
+      CONVERSATION_FOLDERS: ["all", "unread", "chats", "groups"].map((id) => ({
+        id,
+      })),
       conversationsInFolder: () => [],
     },
     "../components/conversations/ConversationItem": {
@@ -152,6 +172,10 @@ function setup({ getProfile, updateProfile } = {}) {
       default: "EmptyState",
     },
     "../components/common/Avatar": { __esModule: true, default: "Avatar" },
+    "../components/common/PresenceSettings": {
+      __esModule: true,
+      default: "PresenceSettings",
+    },
     "../components/common/ConfirmDialog": {
       __esModule: true,
       default: "ConfirmDialog",
@@ -162,15 +186,152 @@ function setup({ getProfile, updateProfile } = {}) {
     "../services/user": { userService },
     "../services/api": { API_BASE: "http://test.invalid" },
     "../components/common/BiometricLock.js": {
-      isBiometricAvailable: async () => false,
+      isBiometricAvailable: async () => biometricSupported,
       isBiometricLockEnabled: async () => false,
       setBiometricLockEnabled: async () => {},
       authenticate: async () => ({ success: true }),
     },
   };
-  const AccountPanel = loadAccountPanel(runner, mocks);
-  return { runner, AccountPanel, userService, updateCalls };
+  const { AccountPanel, default: Screen } = loadAccountPanel(runner, mocks);
+  return { runner, AccountPanel, Screen, userService, updateCalls, alerts };
 }
+
+test("biometric settings stack readable text beside a reserved switch", async () => {
+  const { runner, AccountPanel } = setup({ biometricSupported: true });
+  const render = () =>
+    runner.render(() => AccountPanel({ visible: true, theme: {}, user: {} }));
+  render();
+  await settle();
+  const tree = render();
+  const row = nodes(tree).find(
+    (node) =>
+      node.type === "View" &&
+      node.props.children.some(
+        (child) => child?.props?.accessibilityLabel === "Biometric Lock",
+      ),
+  );
+  assert.ok(row);
+  const column = row.props.children[0];
+  assert.equal(column.props.style.flexDirection, "column");
+  assert.equal(column.props.style.flex, 1);
+  assert.equal(column.props.style.minWidth, 0);
+  assert.equal(row.props.style.gap, 12);
+  const titleStyle = Object.assign({}, ...column.props.children[0].props.style);
+  assert.equal(titleStyle.fontSize, 16);
+  assert.equal(titleStyle.fontWeight, "400");
+});
+
+test("Saved Messages shortcut is available during profile loading and exposes busy state", () => {
+  const { runner, AccountPanel } = setup({
+    getProfile: () => new Promise(() => {}),
+  });
+  let presses = 0;
+  const props = {
+    onSavedMessages: () => {
+      presses++;
+    },
+    openingSavedMessages: false,
+  };
+  const button = () =>
+    nodes(renderPanel(runner, AccountPanel, props)).find(
+      (node) => node.props.accessibilityLabel === "Saved Messages",
+    );
+  assert.ok(button());
+  button().props.onPress();
+  assert.equal(presses, 1);
+  props.openingSavedMessages = true;
+  assert.equal(button().props.disabled, true);
+  assert.equal(button().props.accessibilityState.busy, true);
+  runner.unmount();
+});
+
+test("Saved Messages closes account menu and navigates only after successful opening", async () => {
+  const conversation = { id: "self", type: "direct", other_participant: null };
+  let complete;
+  const { runner, AccountPanel, Screen } = setup({
+    openSavedMessages: () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  });
+  const navigations = [];
+  const render = () =>
+    runner.render(() =>
+      Screen({
+        navigation: {
+          navigate: (...args) => navigations.push(args),
+        },
+      }),
+    );
+  const panel = () =>
+    nodes(render()).find((node) => node.type === AccountPanel);
+  nodes(render())
+    .find((node) => node.type === "ConversationHeader")
+    .props.onAccountPress();
+  const opening = panel().props.onSavedMessages();
+  assert.equal(panel().props.visible, true);
+  assert.equal(navigations.length, 0);
+  complete(conversation);
+  await opening;
+  assert.equal(panel().props.visible, false);
+  assert.equal(navigations[0][0], "Chat");
+  assert.equal(navigations[0][1].conversation, conversation);
+  runner.unmount();
+});
+
+test("Saved Messages failure keeps account menu open for retry", async () => {
+  const { runner, AccountPanel, Screen, alerts } = setup({
+    openSavedMessages: async () => {
+      throw new Error("Offline");
+    },
+  });
+  const render = () =>
+    runner.render(() =>
+      Screen({
+        navigation: {
+          navigate: () => assert.fail("Must not navigate on failure"),
+        },
+      }),
+    );
+  nodes(render())
+    .find((node) => node.type === "ConversationHeader")
+    .props.onAccountPress();
+  await nodes(render())
+    .find((node) => node.type === AccountPanel)
+    .props.onSavedMessages();
+  assert.equal(
+    nodes(render()).find((node) => node.type === AccountPanel).props.visible,
+    true,
+  );
+  assert.deepEqual(alerts, [["Saved Messages", "Offline"]]);
+  runner.unmount();
+});
+
+test("list swipes and tab taps share selection and account panel disables paging", () => {
+  const { runner, Screen } = setup();
+  const render = () => runner.render(() => Screen({ navigation: {} }));
+  const folders = () =>
+    nodes(render()).find((node) => node.type === "ConversationFolders");
+  const handlers = () =>
+    nodes(render()).find((node) => node.props.testPanHandlers)?.props
+      .testPanHandlers;
+  const left = { dx: -80, dy: 4, numberActiveTouches: 1 };
+  assert.equal(folders().props.selectedId, "all");
+  assert.equal(handlers().onMoveShouldSetPanResponderCapture(null, left), true);
+  handlers().onPanResponderRelease(null, left);
+  assert.equal(folders().props.selectedId, "unread");
+  folders().props.onSelect("groups");
+  handlers().onPanResponderRelease(null, left);
+  assert.equal(folders().props.selectedId, "groups");
+  nodes(render())
+    .find((node) => node.type === "ConversationHeader")
+    .props.onAccountPress();
+  assert.equal(
+    handlers().onMoveShouldSetPanResponderCapture(null, left),
+    false,
+  );
+  runner.unmount();
+});
 
 function renderPanel(runner, AccountPanel, props) {
   return runner.render(() =>
@@ -185,9 +346,7 @@ function findToggle(tree) {
 }
 
 function findSave(tree) {
-  return nodes(tree).find(
-    (node) => node.props?.onPress?.name === "handleSave",
-  );
+  return nodes(tree).find((node) => node.props?.onPress?.name === "handleSave");
 }
 
 test("toggle reflects the profile's is_public value, defaulting to visible when undefined", async () => {

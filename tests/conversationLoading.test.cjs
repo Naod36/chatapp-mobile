@@ -12,9 +12,9 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-async function conversationFixture() {
+async function conversationFixture(initialIncoming = ["peer"]) {
   const runner = harness();
-  let incoming = ["peer"];
+  let incoming = initialIncoming;
   let outgoing = [];
   let event;
   let logoutCount = 0;
@@ -86,6 +86,7 @@ async function conversationFixture() {
     runner,
     render,
     requests,
+    emit: (data) => event(data),
     logoutCount: () => logoutCount,
     changeIncoming: (next) => {
       incoming = next;
@@ -105,6 +106,83 @@ const identity = (name) => [
     },
   },
 ];
+
+test("peer receipts and typing preserve unread counts; the fourth arrival increments to four", async () => {
+  const fixture = await conversationFixture([]);
+  fixture
+    .render()
+    .setConversations([{ id: "chat", type: "direct", unread_count: 3 }]);
+  fixture.emit({
+    event: "message_delivered",
+    conversation_id: "chat",
+    user_id: "peer",
+  });
+  fixture.emit({
+    event: "read_update",
+    conversation_id: "chat",
+    user_id: "peer",
+  });
+  fixture.emit({
+    event: "typing_status",
+    conversation_id: "chat",
+    user_id: "peer",
+    is_typing: true,
+  });
+  assert.equal(fixture.render().typingMap.chat, true);
+  assert.equal(fixture.render().conversations[0].unread_count, 3);
+  fixture.emit({
+    event: "new_message",
+    conversation_id: "chat",
+    message_id: "fourth",
+    sender_id: "peer",
+    content: "Four",
+  });
+  assert.equal(fixture.render().conversations[0].unread_count, 4);
+  const timeout = [...fixture.runner.timers.values()].find(
+    (timer) => timer.delay === 4000,
+  );
+  timeout.callback();
+  assert.equal(fixture.render().typingMap.chat, false);
+  assert.equal(fixture.render().conversations[0].unread_count, 4);
+  fixture.emit({
+    event: "read_update",
+    conversation_id: "chat",
+    user_id: "me",
+  });
+  assert.equal(fixture.render().conversations[0].unread_count, 0);
+  fixture.runner.unmount();
+});
+
+test("duplicate arrivals and a stale refresh cannot reset live unread state", async () => {
+  const fixture = await conversationFixture();
+  fixture
+    .render()
+    .setConversations([{ id: "chat", type: "direct", unread_count: 3 }]);
+  const pending = fixture.render().loadConversations();
+  const message = {
+    event: "new_message",
+    conversation_id: "chat",
+    message_id: "fourth",
+    sender_id: "peer",
+    content: "Four",
+  };
+  fixture.emit(message);
+  fixture.emit(message);
+  assert.equal(fixture.render().conversations[0].unread_count, 4);
+  fixture.requests[0].resolve([
+    { id: "chat", type: "direct", unread_count: 3 },
+  ]);
+  await pending;
+  assert.equal(fixture.render().conversations[0].unread_count, 4);
+  const refreshing = fixture.render().loadConversations();
+  fixture.render().markConversationRead("chat");
+  fixture.requests[1].resolve([
+    { id: "chat", type: "direct", unread_count: 4 },
+  ]);
+  await refreshing;
+  assert.equal(fixture.render().conversations[0].unread_count, 0);
+  fixture.runner.unmount();
+});
 
 test("conversation loads resolved in reverse request order keep the newest result", async () => {
   const fixture = await conversationFixture();

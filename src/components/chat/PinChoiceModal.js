@@ -221,14 +221,14 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
+    justifyContent: "flex-end",
     alignItems: "center",
     padding: 20,
   },
   dialog: {
     width: "100%",
-    maxWidth: 340,
-    borderRadius: 16,
+    maxWidth: 560,
+    borderRadius: 8,
     padding: 20,
     borderWidth: 1,
     shadowColor: "#000",

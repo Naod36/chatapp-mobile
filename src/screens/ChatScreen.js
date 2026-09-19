@@ -1,4 +1,10 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   View,
@@ -10,12 +16,13 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Clipboard,
   Keyboard,
   Share,
 } from "react-native";
+import * as Alert from "../services/notices";
 import Svg, { Path } from "react-native-svg";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Clip from "expo-clipboard";
 import * as MediaLibrary from "expo-media-library";
@@ -26,7 +33,7 @@ import { useMessages } from "../hooks/useMessages";
 import { conversationService } from "../services/conversations";
 import { API_BASE } from "../services/api";
 import { refreshMutedConversationsCache } from "../services/notifications";
-import ChatHeader from "../components/chat/ChatHeader";
+import ChatHeader, { UserProfileDetails } from "../components/chat/ChatHeader";
 import ConfirmDialog from "../components/common/ConfirmDialog";
 import ChatOptionsMenu from "../components/chat/ChatOptionsMenu";
 import MessageBubble from "../components/chat/MessageBubble";
@@ -65,6 +72,27 @@ function EmptyChatIcon({ color }) {
     <Svg width="40" height="40" viewBox="0 0 24 24" fill="none">
       <Path
         d="M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function SearchControlIcon({ name, color }) {
+  const paths = {
+    back: "M19 12H5m7-7-7 7 7 7",
+    clear: "m6 6 12 12M18 6 6 18",
+    previous: "m6 15 6-6 6 6",
+    next: "m6 9 6 6 6-6",
+    list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
+  };
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Path
+        d={paths[name]}
         stroke={color}
         strokeWidth="2"
         strokeLinecap="round"
@@ -116,6 +144,7 @@ export default function ChatScreen({ route, navigation }) {
   const directDisabled =
     !isGroup && (!blockStateReady || isUserBlocked || isBlockedByThem);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [isChatPinned, setIsChatPinned] = useState(false);
   const [isChatMuted, setIsChatMuted] = useState(false);
@@ -246,6 +275,7 @@ export default function ChatScreen({ route, navigation }) {
   const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [messageSearchIndex, setMessageSearchIndex] = useState(0);
+  const [searchListVisible, setSearchListVisible] = useState(false);
   const [imageViewerIndex, setImageViewerIndex] = useState(null);
 
   const imageMessages = useMemo(
@@ -274,6 +304,8 @@ export default function ChatScreen({ route, navigation }) {
   // the bottom; otherwise track how many new messages arrived so a "jump to
   // latest" affordance can be shown instead of yanking them down mid-read.
   const flatListRef = useRef(null);
+  const searchScrollTimerRef = useRef(null);
+  const searchScrollAttemptsRef = useRef(0);
   const nearBottomRef = useRef(true);
   const previousMessageIdsRef = useRef(new Set());
   const hasInitializedRef = useRef(false);
@@ -303,18 +335,17 @@ export default function ChatScreen({ route, navigation }) {
       );
       return;
     }
-    if (pinnedMessages.length > 0) return;
+    if (messageSearchOpen || pinnedMessages.length > 0) return;
     if (nearBottomRef.current) {
       flatListRef.current?.scrollToEnd({ animated: true });
       setUnseenCount(0);
     } else if (addedIds.length > 0) {
       setUnseenCount((count) => count + addedIds.length);
     }
-  }, [messages, pinnedMessages.length]);
+  }, [messages, pinnedMessages.length, messageSearchOpen]);
 
   const handleListScroll = useCallback((event) => {
-    const { contentOffset, contentSize, layoutMeasurement } =
-      event.nativeEvent;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const distanceFromBottom =
       contentSize.height - contentOffset.y - layoutMeasurement.height;
     const isNearBottom = distanceFromBottom < 120;
@@ -360,8 +391,17 @@ export default function ChatScreen({ route, navigation }) {
       )
     : [];
 
+  const selectedSearchIndex = searchMatches.length
+    ? messageSearchIndex % searchMatches.length
+    : 0;
+  const selectedSearchMessage = messageSearchOpen
+    ? searchMatches[selectedSearchIndex]
+    : null;
+
   useEffect(() => {
-    if (!searchMatches.length) return;
+    if (!messageSearchOpen || searchListVisible || !searchMatches.length)
+      return;
+    searchScrollAttemptsRef.current = 0;
     const match = searchMatches[messageSearchIndex % searchMatches.length];
     const matchIndex = messages.findIndex(
       (message) =>
@@ -375,7 +415,44 @@ export default function ChatScreen({ route, navigation }) {
         viewPosition: 0.5,
       });
     }
-  }, [messageSearchIndex, messageSearchQuery, messages]);
+    return () => clearTimeout(searchScrollTimerRef.current);
+  }, [
+    messageSearchIndex,
+    messageSearchQuery,
+    messages,
+    messageSearchOpen,
+    searchListVisible,
+  ]);
+
+  const retrySearchScroll = ({ index, averageItemLength }) => {
+    if (
+      !messageSearchOpen ||
+      searchListVisible ||
+      searchScrollAttemptsRef.current >= 3
+    )
+      return;
+    searchScrollAttemptsRef.current += 1;
+    flatListRef.current?.scrollToOffset({
+      offset: averageItemLength * index,
+      animated: false,
+    });
+    clearTimeout(searchScrollTimerRef.current);
+    searchScrollTimerRef.current = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.5,
+      });
+    }, 150);
+  };
+
+  const closeSearch = () => {
+    setMessageSearchOpen(false);
+    setMessageSearchQuery("");
+    setMessageSearchIndex(0);
+    setSearchListVisible(false);
+    Keyboard.dismiss();
+  };
 
   const cycleSearch = useCallback(
     (direction) => {
@@ -769,7 +846,12 @@ export default function ChatScreen({ route, navigation }) {
         setBatchProgress(null);
       }
     },
-    [canInteract, assertInteractionAllowed, buildAttachmentFormData, sendMessage],
+    [
+      canInteract,
+      assertInteractionAllowed,
+      buildAttachmentFormData,
+      sendMessage,
+    ],
   );
 
   // ─── Scroll to end on Keyboard show ──────────────────────────────────────
@@ -817,129 +899,244 @@ export default function ChatScreen({ route, navigation }) {
           { width: "100%", height: "100%", opacity: t.isDark ? 0.14 : 0.2 },
         ]}
       />
-      <ChatHeader
-        onSearchPress={() => setMessageSearchOpen((open) => !open)}
-        conversation={conversation}
-        typingUser={isTypingActive}
-        disableTyping={directDisabled || !blockStateReady}
-        onBack={() => navigation.goBack()}
-        onMorePress={canBlock || isGroup ? handleMorePress : undefined}
-        onTitlePress={
-          isGroup
-            ? () => navigation.navigate("GroupInfo", { conversation })
-            : undefined
-        }
-        isBlocked={isBlockedByThem}
-      />
-
-      {messageSearchOpen && (
-        <View
-          style={[
-            styles.messageSearchBar,
-            { backgroundColor: t.cardBg, borderColor: t.borderColor },
-          ]}
-        >
-          <TextInput
-            autoFocus
-            value={messageSearchQuery}
-            onChangeText={(value) => {
-              setMessageSearchQuery(value);
-              setMessageSearchIndex(0);
-            }}
-            placeholder="Search messages..."
-            placeholderTextColor={t.textMuted}
-            style={[styles.messageSearchInput, { color: t.text }]}
-          />
-          <Text style={{ color: t.textMuted, fontSize: 12 }}>
-            {searchMatches.length
-              ? `${messageSearchIndex + 1}/${searchMatches.length}`
-              : "0 results"}
-          </Text>
-          <TouchableOpacity onPress={() => cycleSearch(-1)}>
-            <Text style={{ color: t.accent, fontSize: 18 }}>‹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => cycleSearch(1)}>
-            <Text style={{ color: t.accent, fontSize: 18 }}>›</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => {
-              setMessageSearchOpen(false);
-              setMessageSearchQuery("");
-            }}
-          >
-            <Text style={{ color: t.textMuted, fontSize: 16 }}>×</Text>
-          </TouchableOpacity>
-        </View>
+      {!messageSearchOpen && (
+        <ChatHeader
+          onSearchPress={() => setMessageSearchOpen((open) => !open)}
+          conversation={conversation}
+          typingUser={isTypingActive}
+          disableTyping={directDisabled || !blockStateReady}
+          onBack={() => navigation.goBack()}
+          onMorePress={canBlock || isGroup ? handleMorePress : undefined}
+          onTitlePress={
+            isGroup
+              ? () => navigation.navigate("GroupInfo", { conversation })
+              : canBlock
+                ? () => setShowUserProfile(true)
+                : undefined
+          }
+          isBlocked={isBlockedByThem}
+        />
       )}
 
-      <PinnedBanner
-        pinnedMessages={pinnedMessages}
-        activeIndex={activePinIndex}
-        theme={t}
-        onCycle={handleCyclePinned}
-        onOpenList={() => setPinnedListVisible(true)}
-        onUnpinActive={
-          directDisabled
-            ? undefined
-            : (msg) =>
-                unpinMessage(msg.message_id || msg.id, msg.scope).catch(
-                  showMutationError,
-                )
-        }
-      />
-
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item, idx) => String(item.id || item.message_id || idx)}
-        onScrollToIndexFailed={() => {}}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => {
-          const senderId = String(item.sender_id || item.user_id || "");
-          const isOwn = senderId === currentUserId;
-          return (
-            <MessageBubble
-              msg={item}
-              repliedMessage={messagesById.get(String(item.reply_to_id))}
-              onReplyPress={scrollToMessageId}
-              isOwn={isOwn}
-              isGroup={isGroup}
-              theme={t}
-              currentUserId={currentUserId}
-              participants={conversation.participants}
-              otherParticipant={conversation.other_participant}
-              userProfile={user}
-              onToggleReaction={handleToggleReaction}
-              onLongPress={openContextMenu}
-              onSwipeReply={beginReply}
-              onImagePress={openImageViewer}
-              suppressReceipts={suppressReceipts}
-              interactionsDisabled={directDisabled}
-            />
-          );
-        }}
-        onContentSizeChange={() => {}}
-        onLayout={() => {}}
-        onScroll={handleListScroll}
-        scrollEventThrottle={100}
-        contentContainerStyle={[styles.listContent, { paddingBottom: 12 }]}
-        ListEmptyComponent={
-          loading ? null : (
-            <View style={styles.emptyWrap}>
-              <View style={{ marginBottom: 12, opacity: 0.6 }}>
-                <EmptyChatIcon color={t.textMuted} />
-              </View>
-              <Text style={[styles.emptyText, { color: t.textMuted }]}>
-                No messages yet. Say hello!
-              </Text>
+      {messageSearchOpen && (
+        <SafeAreaView edges={["top", "left", "right"]}>
+          <View style={styles.searchHeader}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Close search"
+              onPress={closeSearch}
+              style={[
+                styles.searchButton,
+                styles.searchRoundButton,
+                { backgroundColor: t.cardBg, borderColor: t.borderColor },
+              ]}
+            >
+              <SearchControlIcon name="back" color={t.text} />
+            </TouchableOpacity>
+            <View
+              style={[
+                styles.messageSearchBar,
+                { backgroundColor: t.cardBg, borderColor: t.borderColor },
+              ]}
+            >
+              <TextInput
+                autoFocus
+                accessibilityLabel="Search messages"
+                value={messageSearchQuery}
+                onChangeText={(value) => {
+                  setMessageSearchQuery(value);
+                  setMessageSearchIndex(0);
+                }}
+                placeholder="Search messages"
+                placeholderTextColor={t.textMuted}
+                style={[styles.messageSearchInput, { color: t.text }]}
+              />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Clear search"
+                style={styles.searchButton}
+                onPress={() => {
+                  setMessageSearchQuery("");
+                  setMessageSearchIndex(0);
+                }}
+              >
+                <SearchControlIcon name="clear" color={t.textMuted} />
+              </TouchableOpacity>
             </View>
-          )
-        }
-      />
+          </View>
+        </SafeAreaView>
+      )}
 
-      <TypingIndicator username={isTypingActive} theme={t} />
+      {!messageSearchOpen && (
+        <PinnedBanner
+          pinnedMessages={pinnedMessages}
+          activeIndex={activePinIndex}
+          theme={t}
+          onCycle={handleCyclePinned}
+          onOpenList={() => setPinnedListVisible(true)}
+          onUnpinActive={
+            directDisabled
+              ? undefined
+              : (msg) =>
+                  unpinMessage(msg.message_id || msg.id, msg.scope).catch(
+                    showMutationError,
+                  )
+          }
+        />
+      )}
 
-      {unseenCount > 0 && (
+      <View style={styles.messageArea}>
+        {messageSearchOpen && searchListVisible ? (
+          <FlatList
+            key="search-results"
+            accessibilityLabel="Search results"
+            data={searchMatches}
+            keyboardShouldPersistTaps="handled"
+            keyExtractor={(item) => String(item.id || item.message_id)}
+            contentContainerStyle={styles.searchResults}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Open match ${index + 1}`}
+                onPress={() => {
+                  setMessageSearchIndex(index);
+                  setSearchListVisible(false);
+                  Keyboard.dismiss();
+                }}
+                style={[
+                  styles.searchResult,
+                  {
+                    backgroundColor: t.cardBg,
+                    borderBottomColor: t.borderColor,
+                  },
+                ]}
+              >
+                <Text style={[styles.searchResultDate, { color: t.textMuted }]}>
+                  {item.created_at &&
+                  Number.isFinite(Date.parse(item.created_at))
+                    ? new Date(item.created_at).toLocaleString()
+                    : `Match ${index + 1}`}
+                </Text>
+                <Text
+                  numberOfLines={3}
+                  style={[styles.searchResultText, { color: t.text }]}
+                >
+                  {item.content}
+                </Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <Text style={[styles.searchEmpty, { color: t.textMuted }]}>
+                {messageSearchQuery.trim() ? "No matches" : "Search messages"}
+              </Text>
+            }
+          />
+        ) : (
+          <FlatList
+            key="chat-messages"
+            ref={flatListRef}
+            keyboardShouldPersistTaps="handled"
+            extraData={
+              selectedSearchMessage?.id || selectedSearchMessage?.message_id
+            }
+            data={messages}
+            keyExtractor={(item, idx) =>
+              String(item.id || item.message_id || idx)
+            }
+            onScrollToIndexFailed={retrySearchScroll}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => {
+              const senderId = String(item.sender_id || item.user_id || "");
+              const isOwn = senderId === currentUserId;
+              return (
+                <MessageBubble
+                  highlighted={Boolean(
+                    selectedSearchMessage &&
+                    String(item.id || item.message_id) ===
+                      String(
+                        selectedSearchMessage.id ||
+                          selectedSearchMessage.message_id,
+                      ),
+                  )}
+                  msg={item}
+                  repliedMessage={messagesById.get(String(item.reply_to_id))}
+                  onReplyPress={scrollToMessageId}
+                  isOwn={isOwn}
+                  isGroup={isGroup}
+                  theme={t}
+                  currentUserId={currentUserId}
+                  participants={conversation.participants}
+                  otherParticipant={conversation.other_participant}
+                  userProfile={user}
+                  onToggleReaction={handleToggleReaction}
+                  onLongPress={openContextMenu}
+                  onSwipeReply={beginReply}
+                  onImagePress={openImageViewer}
+                  suppressReceipts={suppressReceipts}
+                  interactionsDisabled={directDisabled}
+                />
+              );
+            }}
+            onContentSizeChange={() => {}}
+            onLayout={() => {}}
+            onScroll={handleListScroll}
+            scrollEventThrottle={100}
+            contentContainerStyle={[
+              styles.listContent,
+              { paddingBottom: messageSearchOpen ? 132 : 12 },
+            ]}
+            ListEmptyComponent={
+              loading ? null : (
+                <View style={styles.emptyWrap}>
+                  <View style={{ marginBottom: 12, opacity: 0.6 }}>
+                    <EmptyChatIcon color={t.textMuted} />
+                  </View>
+                  <Text style={[styles.emptyText, { color: t.textMuted }]}>
+                    No messages yet. Say hello!
+                  </Text>
+                </View>
+              )
+            }
+          />
+        )}
+        {messageSearchOpen && !searchListVisible && (
+          <View style={styles.searchArrows}>
+            {[
+              { label: "Previous match", icon: "previous", direction: -1 },
+              { label: "Next match", icon: "next", direction: 1 },
+            ].map((control) => (
+              <TouchableOpacity
+                key={control.icon}
+                accessibilityRole="button"
+                accessibilityLabel={control.label}
+                accessibilityState={{ disabled: !searchMatches.length }}
+                disabled={!searchMatches.length}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  cycleSearch(control.direction);
+                }}
+                style={[
+                  styles.searchButton,
+                  styles.searchRoundButton,
+                  {
+                    backgroundColor: t.cardBg,
+                    borderColor: t.borderColor,
+                    opacity: searchMatches.length ? 1 : 0.4,
+                  },
+                ]}
+              >
+                <SearchControlIcon name={control.icon} color={t.accent} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {!messageSearchOpen && (
+        <TypingIndicator username={isTypingActive} theme={t} />
+      )}
+
+      {!messageSearchOpen && unseenCount > 0 && (
         <TouchableOpacity
           style={[styles.jumpToLatest, { backgroundColor: t.accent }]}
           onPress={jumpToLatest}
@@ -953,30 +1150,80 @@ export default function ChatScreen({ route, navigation }) {
         </TouchableOpacity>
       )}
 
-      <MessageInput
-        value={inputText}
-        onChangeText={setInputText}
-        onSend={handleSend}
-        onTypingStart={handleTypingStart}
-        onTypingStop={handleTypingStop}
-        theme={t}
-        replyingTo={redactMessage(replyingTo, isBlockedBy)}
-        onCancelReply={() => setReplyingTo(null)}
-        editingMessage={editingMessage}
-        onCancelEdit={() => {
-          setEditingMessage(null);
-          setInputText("");
-        }}
-        attachment={attachment}
-        onSelectAttachment={setAttachment}
-        onSelectMultipleImages={handleSendMultipleImages}
-        onClearAttachment={() => setAttachment(null)}
-        isUploading={isUploading}
-        uploadProgress={uploadProgress}
-        batchProgress={batchProgress}
-        disabled={directDisabled}
-        assertInteractionAllowed={assertInteractionAllowed}
-      />
+      {messageSearchOpen ? (
+        <SafeAreaView edges={["bottom", "left", "right"]}>
+          <View
+            style={[
+              styles.searchFooter,
+              { backgroundColor: t.cardBg, borderColor: t.borderColor },
+            ]}
+          >
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.searchCounter, { color: t.text }]}
+            >
+              {searchMatches.length
+                ? `${selectedSearchIndex + 1} of ${searchMatches.length}`
+                : messageSearchQuery.trim()
+                  ? "No matches"
+                  : "0 of 0"}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={
+                searchListVisible ? "Show in Chat" : "Show as List"
+              }
+              accessibilityState={{
+                disabled: !searchMatches.length && !searchListVisible,
+              }}
+              disabled={!searchMatches.length && !searchListVisible}
+              onPress={() => {
+                Keyboard.dismiss();
+                setSearchListVisible((visible) => !visible);
+              }}
+              style={[
+                styles.searchListButton,
+                {
+                  opacity: searchMatches.length || searchListVisible ? 1 : 0.4,
+                },
+              ]}
+            >
+              <SearchControlIcon
+                name={searchListVisible ? "back" : "list"}
+                color={t.accent}
+              />
+              <Text style={[styles.searchListLabel, { color: t.accent }]}>
+                {searchListVisible ? "Show in Chat" : "Show as List"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      ) : (
+        <MessageInput
+          value={inputText}
+          onChangeText={setInputText}
+          onSend={handleSend}
+          onTypingStart={handleTypingStart}
+          onTypingStop={handleTypingStop}
+          theme={t}
+          replyingTo={redactMessage(replyingTo, isBlockedBy)}
+          onCancelReply={() => setReplyingTo(null)}
+          editingMessage={editingMessage}
+          onCancelEdit={() => {
+            setEditingMessage(null);
+            setInputText("");
+          }}
+          attachment={attachment}
+          onSelectAttachment={setAttachment}
+          onSelectMultipleImages={handleSendMultipleImages}
+          onClearAttachment={() => setAttachment(null)}
+          isUploading={isUploading}
+          uploadProgress={uploadProgress}
+          batchProgress={batchProgress}
+          disabled={directDisabled}
+          assertInteractionAllowed={assertInteractionAllowed}
+        />
+      )}
 
       <FullScreenImageViewer
         visible={imageViewerIndex !== null}
@@ -1052,6 +1299,14 @@ export default function ChatScreen({ route, navigation }) {
         }
       />
 
+      <UserProfileDetails
+        visible={showUserProfile}
+        person={otherUser}
+        unavailable={isBlockedByThem}
+        onClose={() => setShowUserProfile(false)}
+        theme={t}
+      />
+
       <ConfirmDialog
         visible={showBlockConfirm}
         title={isUserBlocked ? "Unblock User" : "Block User"}
@@ -1090,21 +1345,71 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   messageSearchBar: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginHorizontal: 12,
-    marginTop: 8,
+    paddingLeft: 16,
+    borderWidth: 1,
+    borderRadius: 24,
+  },
+  searchHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderWidth: 1,
-    borderRadius: 12,
+  },
+  searchButton: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   messageSearchInput: {
     flex: 1,
-    fontSize: 14,
+    minWidth: 0,
+    minHeight: 48,
+    fontSize: 16,
     padding: 0,
   },
+  messageArea: { flex: 1, minHeight: 0 },
+  searchRoundButton: { borderRadius: 24, borderWidth: 1 },
+  searchArrows: { position: "absolute", right: 12, bottom: 12, gap: 10 },
+  searchFooter: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 24,
+    paddingLeft: 18,
+    paddingRight: 8,
+    minHeight: 52,
+  },
+  searchCounter: { fontSize: 15, fontWeight: "600", paddingVertical: 12 },
+  searchListButton: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 8,
+    maxWidth: "100%",
+  },
+  searchListLabel: { fontSize: 15, fontWeight: "500", flexShrink: 1 },
+  searchResults: { padding: 12 },
+  searchResult: {
+    padding: 16,
+    minHeight: 72,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  searchResultDate: { fontSize: 12, marginBottom: 6 },
+  searchResultText: { fontSize: 16, lineHeight: 23 },
+  searchEmpty: { textAlign: "center", fontSize: 15, padding: 24 },
   listContent: {
     flexGrow: 1,
     paddingTop: 10,

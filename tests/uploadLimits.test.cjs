@@ -67,6 +67,7 @@ function messageInputMocks({
     Alert: { alert: (...args) => alerts.push(args) },
   });
   return {
+    "../../services/notices": { alert: (...args) => alerts.push(args) },
     "react-native": native,
     "react-native-svg": {
       __esModule: true,

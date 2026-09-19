@@ -8,10 +8,10 @@ import {
   TouchableWithoutFeedback,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   Modal,
   Platform,
 } from "react-native";
+import * as Alert from "../services/notices";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import Svg, { Path } from "react-native-svg";
@@ -57,7 +57,11 @@ function CameraIcon({ color }) {
         strokeWidth="2"
         strokeLinejoin="round"
       />
-      <Path d="M12 17a4 4 0 100-8 4 4 0 000 8z" stroke={color} strokeWidth="2" />
+      <Path
+        d="M12 17a4 4 0 100-8 4 4 0 000 8z"
+        stroke={color}
+        strokeWidth="2"
+      />
     </Svg>
   );
 }
@@ -122,9 +126,7 @@ export default function GroupInfoScreen({ route, navigation }) {
     (patch) => {
       setConversations((prev) =>
         prev.map((c) =>
-          String(c.id || c.conversation_id) === convId
-            ? { ...c, ...patch }
-            : c,
+          String(c.id || c.conversation_id) === convId ? { ...c, ...patch } : c,
         ),
       );
     },
@@ -149,7 +151,13 @@ export default function GroupInfoScreen({ route, navigation }) {
     } finally {
       setSavingTitle(false);
     }
-  }, [titleInput, titleDirty, convId, conversation.avatar_url, patchConversation]);
+  }, [
+    titleInput,
+    titleDirty,
+    convId,
+    conversation.avatar_url,
+    patchConversation,
+  ]);
 
   const handlePickAvatar = useCallback(async () => {
     if (!isAdmin || uploadingAvatar) return;
@@ -218,7 +226,14 @@ export default function GroupInfoScreen({ route, navigation }) {
     } finally {
       setUploadingAvatar(false);
     }
-  }, [isAdmin, uploadingAvatar, convId, titleInput, conversation.title, patchConversation]);
+  }, [
+    isAdmin,
+    uploadingAvatar,
+    convId,
+    titleInput,
+    conversation.title,
+    patchConversation,
+  ]);
 
   const openMemberActions = useCallback(
     (participant) => {
@@ -374,7 +389,10 @@ export default function GroupInfoScreen({ route, navigation }) {
             />
             {isAdmin && (
               <View
-                style={[styles.cameraBadge, { backgroundColor: t.accent, borderColor: t.bg }]}
+                style={[
+                  styles.cameraBadge,
+                  { backgroundColor: t.accent, borderColor: t.bg },
+                ]}
               >
                 {uploadingAvatar ? (
                   <ActivityIndicator size="small" color="#fff" />
@@ -431,9 +449,7 @@ export default function GroupInfoScreen({ route, navigation }) {
         </View>
 
         {addMemberOpen && (
-          <View
-            style={[styles.addMemberPanel, { borderColor: t.borderColor }]}
-          >
+          <View style={[styles.addMemberPanel, { borderColor: t.borderColor }]}>
             <View
               style={[
                 styles.searchWrap,
@@ -556,7 +572,11 @@ export default function GroupInfoScreen({ route, navigation }) {
                       },
                     ]}
                   >
-                    {isCreator ? "Creator" : isParticipantAdmin ? "Admin" : "Member"}
+                    {isCreator
+                      ? "Creator"
+                      : isParticipantAdmin
+                        ? "Admin"
+                        : "Member"}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -582,9 +602,7 @@ export default function GroupInfoScreen({ route, navigation }) {
               >
                 {actionSheetTarget && (
                   <>
-                    <Text
-                      style={[styles.sheetPreview, { color: t.textMuted }]}
-                    >
+                    <Text style={[styles.sheetPreview, { color: t.textMuted }]}>
                       {actionSheetTarget.display_name ||
                         actionSheetTarget.username}
                     </Text>
@@ -609,9 +627,7 @@ export default function GroupInfoScreen({ route, navigation }) {
                           : "Make Admin"
                       }
                     >
-                      <Text
-                        style={[styles.sheetActionText, { color: t.text }]}
-                      >
+                      <Text style={[styles.sheetActionText, { color: t.text }]}>
                         {actionSheetTarget.role === "admin"
                           ? "Dismiss as Admin"
                           : "Make Admin"}
@@ -627,7 +643,9 @@ export default function GroupInfoScreen({ route, navigation }) {
                   ]}
                   onPress={() => setActionSheetTarget(null)}
                 >
-                  <Text style={[styles.sheetActionText, { color: t.textMuted }]}>
+                  <Text
+                    style={[styles.sheetActionText, { color: t.textMuted }]}
+                  >
                     Cancel
                   </Text>
                 </TouchableOpacity>

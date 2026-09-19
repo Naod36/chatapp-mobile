@@ -18,8 +18,12 @@ import {
   registerForPushNotificationsAsync,
   registerPushToken,
 } from "../services/notifications";
-import { onSessionExpired, SESSION_EXPIRED_MESSAGE } from "../services/session.js";
+import {
+  onSessionExpired,
+  SESSION_EXPIRED_MESSAGE,
+} from "../services/session.js";
 import { THEMES } from "../theme/colors";
+import { applyPresence } from "../utils/presence";
 
 const AppContext = createContext(null);
 const THEME_KEY = "@flowchat_theme_key";
@@ -45,6 +49,8 @@ export function AppProvider({ children }) {
   const blockRefreshRef = useRef(null);
   const conversationGenerationRef = useRef(0);
   const authTokenRef = useRef(null);
+  const unreadRevisionsRef = useRef(new Map());
+  const seenMessagesRef = useRef(new Set());
 
   const themeKey =
     themePreference === "system"
@@ -70,6 +76,8 @@ export function AppProvider({ children }) {
   }, []);
 
   const login = useCallback((userData) => {
+    unreadRevisionsRef.current.clear();
+    seenMessagesRef.current.clear();
     conversationGenerationRef.current += 1;
     authTokenRef.current = userData.token;
     setUser({
@@ -81,6 +89,8 @@ export function AppProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    unreadRevisionsRef.current.clear();
+    seenMessagesRef.current.clear();
     conversationGenerationRef.current += 1;
     authTokenRef.current = null;
     blockRefreshRef.current?.stop();
@@ -157,6 +167,7 @@ export function AppProvider({ children }) {
     async (showUpdating = true) => {
       if (!user?.token || user.token !== authTokenRef.current) return;
       const generation = ++conversationGenerationRef.current;
+      const unreadRevisions = new Map(unreadRevisionsRef.current);
       const isCurrent = () =>
         generation === conversationGenerationRef.current &&
         user.token === authTokenRef.current;
@@ -169,7 +180,28 @@ export function AppProvider({ children }) {
           id: c.id || c.conversation_id,
           conversation_id: c.conversation_id || c.id,
         }));
-        setConversations(normalized);
+        setConversations((previous) =>
+          normalized.map((conversation) => {
+            const identity = String(conversation.id);
+            if (
+              unreadRevisions.get(identity) ===
+              unreadRevisionsRef.current.get(identity)
+            )
+              return conversation;
+            const live = previous.find(
+              (entry) => String(entry.id || entry.conversation_id) === identity,
+            );
+            return live
+              ? {
+                  ...conversation,
+                  unread_count: live.unread_count,
+                  last_message: live.last_message,
+                  last_message_content: live.last_message_content,
+                  last_message_time: live.last_message_time,
+                }
+              : conversation;
+          }),
+        );
       } catch (err) {
         if (!isCurrent()) return;
         console.warn("loadConversations notice:", err.message);
@@ -374,6 +406,21 @@ export function AppProvider({ children }) {
         if (!rawConvId) return;
         const convIdStr = String(rawConvId);
 
+        const messageId = msg.message_id || msg.id;
+        const messageKey = messageId ? `${convIdStr}:${messageId}` : null;
+        if (messageKey && seenMessagesRef.current.has(messageKey)) return;
+        if (messageKey) {
+          seenMessagesRef.current.add(messageKey);
+          if (seenMessagesRef.current.size > 2000)
+            seenMessagesRef.current.delete(
+              seenMessagesRef.current.values().next().value,
+            );
+        }
+        unreadRevisionsRef.current.set(
+          convIdStr,
+          (unreadRevisionsRef.current.get(convIdStr) || 0) + 1,
+        );
+
         // Derive a clean text preview
         let preview = "";
         if (msg.content) preview = msg.content;
@@ -393,6 +440,15 @@ export function AppProvider({ children }) {
             return prev;
           }
           const updated = [...prev];
+          if (
+            messageId &&
+            String(
+              updated[idx].last_message?.id ||
+                updated[idx].last_message?.message_id ||
+                "",
+            ) === String(messageId)
+          )
+            return prev;
           const conv = {
             ...updated[idx],
             id: updated[idx].id || updated[idx].conversation_id,
@@ -402,7 +458,7 @@ export function AppProvider({ children }) {
             last_message_time: msg.created_at || new Date().toISOString(),
             unread_count:
               String(msg.sender_id) !== currentUserId
-                ? (updated[idx].unread_count || 0) + 1
+                ? (Number(updated[idx].unread_count) || 0) + 1
                 : updated[idx].unread_count,
           };
           updated.splice(idx, 1);
@@ -416,20 +472,8 @@ export function AppProvider({ children }) {
         const status = data.status;
         if (!uid || !status || getBlockPolicy(uid).hideIdentity) return;
         setPresenceMap((prev) => ({ ...prev, [uid]: status }));
-        setConversations((prev) =>
-          prev.map((c) => {
-            const otherId = String(
-              c.other_participant?.user_id || c.other_participant?.id || "",
-            );
-            if (otherId && otherId === uid) {
-              return {
-                ...c,
-                status,
-                other_participant: { ...c.other_participant, status },
-              };
-            }
-            return c;
-          }),
+        setConversations((previous) =>
+          previous.map((conversation) => applyPresence(conversation, data)),
         );
 
         // ── Typing ───────────────────────────────────────────────────────
@@ -454,8 +498,14 @@ export function AppProvider({ children }) {
 
         // ── Read / delivered ─────────────────────────────────────────────
       } else if (event === "read_update" || event === "message_delivered") {
+        if (event !== "read_update" || String(data.user_id) !== currentUserId)
+          return;
         const convIdStr = String(data.conversation_id || "");
         if (!convIdStr) return;
+        unreadRevisionsRef.current.set(
+          convIdStr,
+          (unreadRevisionsRef.current.get(convIdStr) || 0) + 1,
+        );
         setConversations((prev) =>
           prev.map((c) =>
             String(c.id) === convIdStr ? { ...c, unread_count: 0 } : c,
@@ -518,6 +568,11 @@ export function AppProvider({ children }) {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
   const markConversationRead = useCallback((convId) => {
+    const identity = String(convId);
+    unreadRevisionsRef.current.set(
+      identity,
+      (unreadRevisionsRef.current.get(identity) || 0) + 1,
+    );
     setConversations((prev) =>
       prev.map((c) =>
         String(c.id) === String(convId) ? { ...c, unread_count: 0 } : c,

@@ -110,6 +110,16 @@ function harness() {
           require: (name) => {
             if (name === "react") return react;
             if (name in mocks) return mocks[name];
+            if (name === "react-native-safe-area-context")
+              return {
+                SafeAreaView: "SafeAreaView",
+                useSafeAreaInsets: () => ({
+                  top: 0,
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                }),
+              };
             if (name.startsWith("."))
               return require(path.resolve(path.dirname(filename), name));
             throw new Error(`Unmocked dependency: ${name}`);

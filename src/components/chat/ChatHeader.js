@@ -5,12 +5,124 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Svg, { Circle, Path } from "react-native-svg";
 import Avatar from "../common/Avatar";
 import { useApp } from "../../context/AppContext";
+import { presenceLabel } from "../../utils/presence";
+
+export function UserProfileDetails({
+  visible,
+  person,
+  unavailable,
+  onClose,
+  theme,
+}) {
+  const insets = useSafeAreaInsets();
+  const { getPresence } = useApp();
+  const identity = person?.user_id || person?.id;
+  const online =
+    !unavailable &&
+    person?.presence_visibility !== "invisible" &&
+    person?.status !== "hidden" &&
+    getPresence(identity) !== "hidden" &&
+    (getPresence(identity) === "online" || person?.status === "online");
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.bg,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        }}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 16,
+          }}
+        >
+          <Text
+            style={{
+              flex: 1,
+              fontSize: 18,
+              fontWeight: "700",
+              color: theme.text,
+            }}
+          >
+            Profile
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close profile"
+            style={{
+              minWidth: 64,
+              minHeight: 48,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: theme.accent, fontWeight: "600" }}>Done</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+          {unavailable || !person ? (
+            <Text style={{ color: theme.text }}>Person Not Available</Text>
+          ) : (
+            <>
+              <Avatar
+                uri={person.avatar_url}
+                name={person.display_name || person.username}
+                size={96}
+                isOnline={online}
+              />
+              <Text
+                selectable
+                style={{ fontSize: 22, fontWeight: "700", color: theme.text }}
+              >
+                {person.display_name || person.username}
+              </Text>
+              {!!person.username && (
+                <Text
+                  selectable
+                  style={{ fontSize: 16, color: theme.textMuted }}
+                >
+                  @{person.username}
+                </Text>
+              )}
+              <Text style={{ color: online ? theme.success : theme.textMuted }}>
+                {presenceLabel(
+                  person,
+                  (date) => `Last seen ${new Date(date).toLocaleString()}`,
+                )}
+              </Text>
+              {!!person.bio && (
+                <View style={{ gap: 8 }}>
+                  <Text style={{ color: theme.textMuted, fontSize: 14 }}>
+                    Bio
+                  </Text>
+                  <Text
+                    selectable
+                    style={{ color: theme.text, fontSize: 16, lineHeight: 24 }}
+                  >
+                    {person.bio}
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
 
 /**
  * ChatHeader — top navigation bar for the chat screen.
@@ -54,6 +166,9 @@ export default function ChatHeader({
     !isBlocked &&
     !isGroup &&
     !isSaved &&
+    presenceStatus !== "hidden" &&
+    otherUser?.presence_visibility !== "invisible" &&
+    otherUser?.status !== "hidden" &&
     (presenceStatus === "online" ||
       otherUser?.status === "online" ||
       conversation?.status === "online");
@@ -65,10 +180,13 @@ export default function ChatHeader({
     subtitle = "";
   } else if (isTyping) {
     subtitle = "typing...";
-  } else if (isOnline) {
-    subtitle = "online";
   } else if (isGroup) {
     subtitle = `${conversation?.participants?.length || 0} members`;
+  } else if (!isSaved) {
+    subtitle = presenceLabel(
+      otherUser,
+      (date) => `Last seen ${new Date(date).toLocaleString()}`,
+    );
   }
 
   return (
@@ -97,15 +215,34 @@ export default function ChatHeader({
         <Text style={[styles.backIcon, { color: t.accent }]}>‹</Text>
       </TouchableOpacity>
 
-      <Avatar
-        uri={avatarUri}
-        name={name}
-        size={40}
-        isOnline={isOnline}
-        borderColor={t.headerBg}
-        isGroup={isGroup}
-        isSaved={isSaved}
-      />
+      <TouchableOpacity
+        onPress={onTitlePress}
+        disabled={!onTitlePress}
+        accessibilityRole={onTitlePress ? "button" : undefined}
+        accessibilityLabel={
+          onTitlePress
+            ? isGroup
+              ? "Open group info from avatar"
+              : "Open user profile from avatar"
+            : undefined
+        }
+        style={{
+          minWidth: 48,
+          minHeight: 48,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Avatar
+          uri={avatarUri}
+          name={name}
+          size={40}
+          isOnline={isOnline}
+          borderColor={t.headerBg}
+          isGroup={isGroup}
+          isSaved={isSaved}
+        />
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.titleArea}
@@ -113,7 +250,13 @@ export default function ChatHeader({
         disabled={!onTitlePress}
         onPress={onTitlePress}
         accessibilityRole={onTitlePress ? "button" : undefined}
-        accessibilityLabel={onTitlePress ? "Open group info" : undefined}
+        accessibilityLabel={
+          onTitlePress
+            ? isGroup
+              ? "Open group info"
+              : "Open user profile"
+            : undefined
+        }
       >
         <Text style={[styles.titleText, { color: t.text }]} numberOfLines={1}>
           {name}
@@ -206,6 +349,7 @@ const styles = StyleSheet.create({
   },
   titleArea: {
     flex: 1,
+    minHeight: 48,
     justifyContent: "center",
   },
   titleText: {

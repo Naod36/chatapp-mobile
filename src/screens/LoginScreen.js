@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   ScrollView,
@@ -754,245 +753,273 @@ export default function LoginScreen({
 
           {!showForgotPassword && (
             <>
-          {/* Google Sign In */}
-          {renderFormItem(
-            <TouchableOpacity
-              style={styles.googleBtn}
-              onPress={handleGoogleButtonPress}
-              disabled={
-                (Platform.OS === "web" && !request) || googleLoading || loading
-              }
-              activeOpacity={0.8}
-            >
-              {googleLoading ? (
-                <ActivityIndicator color={t.text} size="small" />
-              ) : (
-                <>
-                  <GoogleIcon />
-                  <Text style={[styles.googleBtnText, { color: t.text }]}>
-                    {isSignUp ? "Sign up with Google" : "Sign in with Google"}
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>,
-            formIndex++,
-          )}
-
-          {/* OR Divider */}
-          {renderFormItem(
-            <View style={styles.dividerRow}>
-              <View
-                style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
-              />
-              <Text style={[styles.dividerText, { color: t.textMuted }]}>
-                OR
-              </Text>
-              <View
-                style={[styles.dividerLine, { backgroundColor: t.inputBorder }]}
-              />
-            </View>,
-            formIndex++,
-          )}
-
-          {/* Input fields */}
-          {isSignUp &&
-            renderFormItem(
-              <View>
-                <Text style={[styles.label, { color: t.text }]}>Username</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: t.inputBorder,
-                      color: t.text,
-                      backgroundColor: "transparent",
-                    },
-                  ]}
-                  placeholder="Username"
-                  placeholderTextColor={t.textMuted}
-                  value={identifier}
-                  onChangeText={setIdentifier}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>,
-              formIndex++,
-            )}
-
-          {renderFormItem(
-            <View>
-              <Text style={[styles.label, { color: t.text }]}>
-                {isSignUp ? "Email" : "Username or Email"}
-              </Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  {
-                    borderColor: t.inputBorder,
-                    color: t.text,
-                    backgroundColor: "transparent",
-                  },
-                ]}
-                placeholder={isSignUp ? "Email address" : "Email or username"}
-                placeholderTextColor={t.textMuted}
-                value={isSignUp ? email : identifier}
-                onChangeText={isSignUp ? setEmail : setIdentifier}
-                autoCapitalize="none"
-                keyboardType={isSignUp ? "email-address" : "default"}
-                autoCorrect={false}
-              />
-            </View>,
-            formIndex++,
-          )}
-
-          {renderFormItem(
-            <View>
-              <Text style={[styles.label, { color: t.text }]}>Password</Text>
-              <View style={{ position: "relative" }}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    {
-                      borderColor: t.inputBorder,
-                      color: t.text,
-                      backgroundColor: "transparent",
-                      paddingRight: 56,
-                    },
-                  ]}
-                  placeholder="Password"
-                  placeholderTextColor={t.textMuted}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  autoComplete={isSignUp ? "new-password" : "current-password"}
-                  accessibilityLabel="Password"
-                  onSubmitEditing={handleSubmit}
-                />
+              {/* Google Sign In */}
+              {renderFormItem(
                 <TouchableOpacity
-                  onPress={() => setShowPassword((visible) => !visible)}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    showPassword ? "Hide password" : "Show password"
+                  style={styles.googleBtn}
+                  onPress={handleGoogleButtonPress}
+                  disabled={
+                    (Platform.OS === "web" && !request) ||
+                    googleLoading ||
+                    loading
                   }
-                  style={{
-                    position: "absolute",
-                    right: 4,
-                    top: 1,
-                    width: 44,
-                    height: 44,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  activeOpacity={0.8}
                 >
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z"
-                      stroke={t.textMuted}
-                      strokeWidth="1.7"
-                    />
-                    {showPassword && (
-                      <Path
-                        d="M3 3l18 18"
-                        stroke={t.textMuted}
-                        strokeWidth="1.7"
-                      />
-                    )}
-                  </Svg>
-                </TouchableOpacity>
-              </View>
-            </View>,
-            formIndex++,
-          )}
+                  {googleLoading ? (
+                    <ActivityIndicator color={t.text} size="small" />
+                  ) : (
+                    <>
+                      <GoogleIcon />
+                      <Text style={[styles.googleBtnText, { color: t.text }]}>
+                        {isSignUp
+                          ? "Sign up with Google"
+                          : "Sign in with Google"}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>,
+                formIndex++,
+              )}
 
-          {/* Submit */}
-          {renderFormItem(
-            <TouchableOpacity
-              style={[
-                styles.submitBtn,
-                {
-                  backgroundColor: t.accent,
-                  opacity: loading || googleLoading ? 0.5 : 1,
-                },
-              ]}
-              onPress={handleSubmit}
-              accessibilityRole="button"
-              accessibilityLabel={isSignUp ? "Create account" : "Sign in"}
-              accessibilityState={{
-                disabled: loading || googleLoading,
-                busy: loading,
-              }}
-              disabled={loading || googleLoading}
-              activeOpacity={0.85}
-            >
-              <Text style={[styles.submitBtnText, { color: t.bg }]}>
-                {isSignUp ? "Create account" : "Sign in"}
-              </Text>
-              <View style={styles.submitBtnIcon}>
-                {loading ? (
-                  <ActivityIndicator color={t.bg} size="small" />
-                ) : (
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M4 12h15m-6-6 6 6-6 6"
-                      stroke={t.bg}
-                      strokeWidth="1.8"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+              {/* OR Divider */}
+              {renderFormItem(
+                <View style={styles.dividerRow}>
+                  <View
+                    style={[
+                      styles.dividerLine,
+                      { backgroundColor: t.inputBorder },
+                    ]}
+                  />
+                  <Text style={[styles.dividerText, { color: t.textMuted }]}>
+                    OR
+                  </Text>
+                  <View
+                    style={[
+                      styles.dividerLine,
+                      { backgroundColor: t.inputBorder },
+                    ]}
+                  />
+                </View>,
+                formIndex++,
+              )}
+
+              {/* Input fields */}
+              {isSignUp &&
+                renderFormItem(
+                  <View>
+                    <Text style={[styles.label, { color: t.text }]}>
+                      Username
+                    </Text>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          borderColor: t.inputBorder,
+                          color: t.text,
+                          backgroundColor: "transparent",
+                        },
+                      ]}
+                      placeholder="Username"
+                      placeholderTextColor={t.textMuted}
+                      value={identifier}
+                      onChangeText={setIdentifier}
+                      autoCapitalize="none"
+                      autoCorrect={false}
                     />
-                  </Svg>
+                  </View>,
+                  formIndex++,
                 )}
-              </View>
-            </TouchableOpacity>,
-            formIndex++,
-          )}
 
-          {/* Forgot password link (login mode only) */}
-          {!isSignUp &&
-            renderFormItem(
-              <TouchableOpacity
-                onPress={handleOpenForgotPassword}
-                accessibilityRole="button"
-                accessibilityLabel="Forgot password?"
-                disabled={loading || googleLoading}
-                style={styles.forgotBtn}
-              >
-                <Text style={[styles.forgotText, { color: t.textMuted }]}>
-                  Forgot password?
-                </Text>
-              </TouchableOpacity>,
-              formIndex++,
-            )}
+              {renderFormItem(
+                <View>
+                  <Text style={[styles.label, { color: t.text }]}>
+                    {isSignUp ? "Email" : "Username or Email"}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        borderColor: t.inputBorder,
+                        color: t.text,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    placeholder={
+                      isSignUp ? "Email address" : "Email or username"
+                    }
+                    placeholderTextColor={t.textMuted}
+                    value={isSignUp ? email : identifier}
+                    onChangeText={isSignUp ? setEmail : setIdentifier}
+                    autoCapitalize="none"
+                    keyboardType={isSignUp ? "email-address" : "default"}
+                    autoCorrect={false}
+                  />
+                </View>,
+                formIndex++,
+              )}
 
-          {/* Switch mode */}
-          {renderFormItem(
-            <TouchableOpacity
-              onPress={() => {
-                setIsSignUp(!isSignUp);
-                setError(null);
-                setShowPassword(false);
-              }}
-              disabled={loading || googleLoading}
-              style={styles.switchBtn}
-            >
-              <Text style={[styles.switchText, { color: t.textMuted }]}>
-                {isSignUp
-                  ? "Already have an account? "
-                  : "Don't have an account? "}
-                <Text
-                  style={{
-                    color: t.text,
-                    fontWeight: "700",
-                    textDecorationLine: "underline",
+              {renderFormItem(
+                <View>
+                  <Text style={[styles.label, { color: t.text }]}>
+                    Password
+                  </Text>
+                  <View style={{ position: "relative" }}>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        {
+                          borderColor: t.inputBorder,
+                          color: t.text,
+                          backgroundColor: "transparent",
+                          paddingRight: 56,
+                        },
+                      ]}
+                      placeholder="Password"
+                      placeholderTextColor={t.textMuted}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete={
+                        isSignUp ? "new-password" : "current-password"
+                      }
+                      accessibilityLabel="Password"
+                      onSubmitEditing={handleSubmit}
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword((visible) => !visible)}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                      style={{
+                        position: "absolute",
+                        right: 4,
+                        top: 1,
+                        width: 44,
+                        height: 44,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <Path
+                          d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 100 6 3 3 0 000-6z"
+                          stroke={t.textMuted}
+                          strokeWidth="1.7"
+                        />
+                        {showPassword && (
+                          <Path
+                            d="M3 3l18 18"
+                            stroke={t.textMuted}
+                            strokeWidth="1.7"
+                          />
+                        )}
+                      </Svg>
+                    </TouchableOpacity>
+                  </View>
+                </View>,
+                formIndex++,
+              )}
+
+              {/* Submit */}
+              {renderFormItem(
+                <TouchableOpacity
+                  style={[
+                    styles.submitBtn,
+                    {
+                      backgroundColor: t.accent,
+                      opacity: loading || googleLoading ? 0.5 : 1,
+                    },
+                  ]}
+                  onPress={handleSubmit}
+                  accessibilityRole="button"
+                  accessibilityLabel={isSignUp ? "Create account" : "Sign in"}
+                  accessibilityState={{
+                    disabled: loading || googleLoading,
+                    busy: loading,
                   }}
+                  disabled={loading || googleLoading}
+                  activeOpacity={0.85}
                 >
-                  {isSignUp ? "Sign In" : "Create an Account"}
-                </Text>
-              </Text>
-            </TouchableOpacity>,
-            formIndex++,
-          )}
+                  <Text style={[styles.submitBtnText, { color: t.bg }]}>
+                    {isSignUp ? "Create account" : "Sign in"}
+                  </Text>
+                  <View style={styles.submitBtnIcon}>
+                    {loading ? (
+                      <ActivityIndicator color={t.bg} size="small" />
+                    ) : (
+                      <Svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <Path
+                          d="M4 12h15m-6-6 6 6-6 6"
+                          stroke={t.bg}
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </Svg>
+                    )}
+                  </View>
+                </TouchableOpacity>,
+                formIndex++,
+              )}
+
+              {/* Forgot password link (login mode only) */}
+              {!isSignUp &&
+                renderFormItem(
+                  <TouchableOpacity
+                    onPress={handleOpenForgotPassword}
+                    accessibilityRole="button"
+                    accessibilityLabel="Forgot password?"
+                    disabled={loading || googleLoading}
+                    style={styles.forgotBtn}
+                  >
+                    <Text style={[styles.forgotText, { color: t.textMuted }]}>
+                      Forgot password?
+                    </Text>
+                  </TouchableOpacity>,
+                  formIndex++,
+                )}
+
+              {/* Switch mode */}
+              {renderFormItem(
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsSignUp(!isSignUp);
+                    setError(null);
+                    setShowPassword(false);
+                  }}
+                  disabled={loading || googleLoading}
+                  style={styles.switchBtn}
+                >
+                  <Text style={[styles.switchText, { color: t.textMuted }]}>
+                    {isSignUp
+                      ? "Already have an account? "
+                      : "Don't have an account? "}
+                    <Text
+                      style={{
+                        color: t.text,
+                        fontWeight: "700",
+                        textDecorationLine: "underline",
+                      }}
+                    >
+                      {isSignUp ? "Sign In" : "Create an Account"}
+                    </Text>
+                  </Text>
+                </TouchableOpacity>,
+                formIndex++,
+              )}
             </>
           )}
         </Animated.View>

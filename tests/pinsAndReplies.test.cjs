@@ -56,6 +56,35 @@ test("each pinned chat has a marker and distinct styling; ordinary chats do not"
   );
 });
 
+test("typing and muted indicators never hide an unread badge in direct or group rows", () => {
+  const { runner, mocks } = setup();
+  const Item = runner.load(
+    "src/components/conversations/ConversationItem.js",
+    mocks,
+  ).default;
+  for (const type of ["direct", "group"]) {
+    const tree = Item({
+      conversation: {
+        id: "chat",
+        type,
+        unread_count: 4,
+        other_participant: { user_id: "peer" },
+      },
+      isTyping: true,
+      isMuted: true,
+    });
+    assert.ok(
+      nodes(tree).some((node) => node.props.children?.includes("typing...")),
+    );
+    assert.ok(nodes(tree).some((node) => node.props.children?.includes(4)));
+    assert.ok(
+      nodes(tree).some(
+        (node) => node.props.accessibilityLabel === "Muted chat",
+      ),
+    );
+  }
+});
+
 test("ID-only reply displays quote, supports navigation and preserves identity privacy", () => {
   const { runner, state, mocks } = setup();
   const { default: Bubble } = runner.load(
